@@ -2,7 +2,7 @@ var sample_stream = require('./index.js');
 
 /*The streamUUID is provided by Vector*/
 sample_stream.streamUUID = "sampleStream";
-sample_stream.token      = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ7XCJ1c2VySURcIjoxLFwidXNlcm5hbWVcIjpcImFkbWluXCIsXCJyb2xlXCI6XCJBRE1JTlwiLFwid2F0Y2hJZFwiOjIwOX0iLCJpc3MiOiJodHRwczpcL1wvdmVjdG9yd2F0Y2guY29tIiwiaWF0IjoxNDQxMDk0NTkwfQ.zwruL5kSV1YYZFc3WYg32NvoVpOrVZ-272oWARkLszc";
+sample_stream.token      = "****";
 
 /*************Custom code**********/
 var counter = 0;
