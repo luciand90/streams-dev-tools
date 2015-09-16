@@ -1,1 +1,1 @@
-# streams
+# Tool for developing VectorWatch streams
