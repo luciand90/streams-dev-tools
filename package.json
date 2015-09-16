@@ -1,6 +1,6 @@
 {
   "name": "stream-dev-tools",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "npm package for developing VectorWatch stream",
   "main": "index.js",
   "scripts": {
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git clone git@bitbucket.org:luciand90/streamdevtools.git"
+    "url": "git clone https://github.com/luciand90/streams-dev-tools.git"
   },
   "keywords": [
     "VectorWatch"
@@ -22,7 +22,8 @@
     "express-myconnection": "*",
     "express-validator": "^2.6.0",
     "mysql": "*",
-    "request": "*",
-    "node-schedule" : "*"
+    "node-promise": "^0.5.12",
+    "node-schedule": "*",
+    "request": "*"
   }
 }

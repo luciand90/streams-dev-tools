@@ -26,7 +26,7 @@ var VectorWatchStream = function () {
     this.streamUUID = "";
     this.defaultSetting = "default";
     /*Private*/
-    var pushURL = "http://localhost:8080/VectorCloud/rest/v1/app/push", getChannelData = null;
+    var pushURL = "http://52.16.43.57:8080/VectorCloud/rest/v1/app/push", getChannelData = null;
 
     /*****Methods*****/
 
@@ -54,12 +54,9 @@ var VectorWatchStream = function () {
             console.log("Request passed validation");
             var eventType = req.body.eventType;
             var user_id = req.body.userKey;
-            var settingsMap = req.body.configStreamSettings ? req.body.configStreamSettings.userSettingsMap : {
-
-
-            };
+            var settingsMap = req.body.configStreamSettings ? req.body.configStreamSettings.userSettingsMap : {};
             var channelLabel;
-            for(key in req.body.configStreamSettings.userSettingsMap){
+            for (key in settingsMap) {
                 channelLabel = req.body.configStreamSettings.userSettingsMap.uniqueLabel;
             }
 
@@ -71,11 +68,11 @@ var VectorWatchStream = function () {
                 }, function (reason) {
                     console.log('Handle rejected promise (' + reason + ') here.');
                 });
-                var streamData = self.registerSettings(user_id, settingsMap, function (result) {
+                var streamData = self.registerSettings(settingsMap, function (result) {
                     promise.resolve(result);
                 });
             } else if (eventType == "USR_UNREG") {
-                self.unregisterSettings(user_id, settingsMap);
+                self.unregisterSettings(settingsMap);
                 res.sendStatus(200);
             } else {
                 return next("No known event");
@@ -96,10 +93,16 @@ var VectorWatchStream = function () {
     };
 
     /** Sends update request to Vector Cloud, with all the information needed.
-     * @param requestList {Object}
+     * @param pushDataContent {String/Object}
+     * @param channelLabel {Object}
+     * @param settingsMap {Object}
      * @returns {null}
      * */
-    this.sendDeliverRequests = function (requestList) {
+    this.sendDeliverRequests = function (dataArray) {
+        var requestList = [];//this.packageRequestForData(dataObject.data, dataObject.settings)
+        dataArray.forEach(function(element){
+            requestList.push(self.packageRequestForData(element.data, element.settings));
+        });
         var options = {
             uri: pushURL,
             method: 'POST',
@@ -132,13 +135,13 @@ var VectorWatchStream = function () {
     };
 
     /** Set the function that returns the stream value for a given setting/settings
-     * @param pushDataContent {String/Object}  The desired function. Should return null if no info.
-     * @param channelLabel {Object}  The desired function. Should return null if no info.
-     * @param settingsMap {Object}  The desired function. Should return null if no info.
+     * @param pushDataContent {String/Object}
+     * @param channelLabel {Object}
+     * @param settingsMap {Object}
      * @returns {Object}
      *
      **/
-    this.packageRequestForData = function (pushDataContent, channelLabel, settingsMap) {
+    this.packageRequestForData = function (pushDataContent, settingsMap, channelLabel) {
         settingsMap = settingsMap ? settingsMap : {};
         channelLabel = channelLabel ? channelLabel : "";
         var deliverRequest = {settings: settingsMap, streamUUID: this.streamUUID, streamData: {v: 1, p: []}};
@@ -154,23 +157,5 @@ var VectorWatchStream = function () {
         }
         return deliverRequest;
     };
-
-    /** Set /push call to Vector cloud to update your client's stream data.
-     * @returns {null}
-     **/
-    this.updateClients = function () {
-        var deliverRequests = [];
-        var self = this;
-        for (var key in globalUserSettingsMap) {
-            if (typeof(globalUserSettingsMap[key]) != 'undefined' && globalUserSettingsMap[key] != null) {
-                var reqObj = self.getDeliverRequest(null, globalUserSettingsMap[key].userSettingsMap);
-                if (reqObj != null) {
-                    deliverRequests.push(reqObj);
-                }
-            }
-        }
-        console.log(deliverRequests);
-        sendDeliverRequests(deliverRequests);
-    }
 };
 module.exports = new VectorWatchStream();
