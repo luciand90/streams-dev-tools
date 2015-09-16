@@ -9,7 +9,9 @@ var counter = 0;
 function updateAll() {
     counter++;
     sample_stream.sendDeliverRequests([{
-        settings: {},
+        settings: {
+            "Display_option": "all"
+        },
         data: counter
     }]);
 }

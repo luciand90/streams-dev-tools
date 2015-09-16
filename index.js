@@ -68,11 +68,11 @@ var VectorWatchStream = function () {
                 }, function (reason) {
                     console.log('Handle rejected promise (' + reason + ') here.');
                 });
-                var streamData = self.registerSettings(settingsMap, function (result) {
+                var streamData = self.registerSettings(self.simplify(settingsMap), function (result) {
                     promise.resolve(result);
                 });
             } else if (eventType == "USR_UNREG") {
-                self.unregisterSettings(settingsMap);
+                self.unregisterSettings(self.simplify(settingsMap));
                 res.sendStatus(200);
             } else {
                 return next("No known event");
@@ -100,7 +100,7 @@ var VectorWatchStream = function () {
      * */
     this.sendDeliverRequests = function (dataArray) {
         var requestList = [];//this.packageRequestForData(dataObject.data, dataObject.settings)
-        dataArray.forEach(function(element){
+        dataArray.forEach(function (element) {
             requestList.push(self.packageRequestForData(element.data, element.settings));
         });
         var options = {
@@ -143,8 +143,15 @@ var VectorWatchStream = function () {
      **/
     this.packageRequestForData = function (pushDataContent, settingsMap, channelLabel) {
         settingsMap = settingsMap ? settingsMap : {};
-        channelLabel = channelLabel ? channelLabel : "";
-        var deliverRequest = {settings: settingsMap, streamUUID: this.streamUUID, streamData: {v: 1, p: []}};
+        channelLabel = channelLabel ? channelLabel : "XXX";
+
+        if (typeof channelLabel === 'object') {
+            for (var key in channelLabel) {
+                channelLabel = key;
+                break;
+            }
+        }
+        var deliverRequest = {v: 1, p: []};
 
         if (pushDataContent != null) {
             pushDataContent = {
@@ -153,9 +160,21 @@ var VectorWatchStream = function () {
                 channelLabel: channelLabel,
                 d: pushDataContent
             };
-            deliverRequest.streamData.p.push(pushDataContent);
+            deliverRequest.p.push(pushDataContent);
         }
+        console.log(deliverRequest);
         return deliverRequest;
     };
+
+    this.simplify = function (settingsMap) {
+        var ret = {};
+
+        for (var key in settingsMap) {
+            for (var k2 in settingsMap[key].userSettings) {
+                ret[k2] = settingsMap[key].userSettings[k2].name;
+            }
+        }
+        return ret;
+    }
 };
 module.exports = new VectorWatchStream();
