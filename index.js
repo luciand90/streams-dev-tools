@@ -25,7 +25,7 @@ var VectorWatchStream = function () {
     this.streamUUID = "";
     this.defaultSetting = "default";
     /*Private*/
-    var pushURL = "http://52.16.43.57:8080/VectorCloud/rest/v1/app/push", getChannelData = null;
+    var pushURL = "http://localhost:8080/VectorCloud/rest/v1/app/push", getChannelData = null;
 
     /*****Methods*****/
 
@@ -38,7 +38,6 @@ var VectorWatchStream = function () {
             console.log(req.method, req.url);
             next();
         });
-
         router.route('/callback').post(function (req, res, next) {
             req.assert('eventType', 'Event type is required').notEmpty();
             console.log(JSON.stringify(req.body));
@@ -62,7 +61,7 @@ var VectorWatchStream = function () {
             if (eventType == "USR_REG") {
                 var promise = new Promise();
                 promise.then(function (streamData) {
-                    streamData = self.packageRequestForData(streamData, settingsMap);
+                    streamData = self.packageRequestForData(streamData, channelLabel);
                     res.status(200).json(streamData);
                 }, function (reason) {
                     console.log('Handle rejected promise (' + reason + ') here.');
@@ -140,8 +139,8 @@ var VectorWatchStream = function () {
      * @returns {Object}
      *
      **/
-    this.packageRequestForData = function (pushDataContent, channelLabel, update) {
-        channelLabel = channelLabel ? channelLabel : "XXX";
+    this.packageRequestForData = function (pushDataContent, channelLabel) {
+        channelLabel = channelLabel ? channelLabel : "default";
 
         if (typeof channelLabel === 'object') {
             for (var key in channelLabel) {

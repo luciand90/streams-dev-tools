@@ -17,6 +17,7 @@ setInterval(updateAll, 1000*3600); // every hour, increment the counter
 
 // This function is called every time a user adds the stream to their watch face
 sample_stream.registerSettings = function (callback, settings) {
+    console.log('test');
     counter++;
     // return the current counter value to be used
     callback(counter);
