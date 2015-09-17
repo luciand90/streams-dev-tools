@@ -4,7 +4,6 @@ var express = require('express'),
     server = express(),
     expressValidator = require('express-validator'),
     request = require('request'),
-    schedule = require('node-schedule'),
     mysql = require('mysql');
 var Promise = require("node-promise").Promise;
 
@@ -63,14 +62,14 @@ var VectorWatchStream = function () {
             if (eventType == "USR_REG") {
                 var promise = new Promise();
                 promise.then(function (streamData) {
-                    streamData = self.packageRequestForData(streamData, null, settingsMap);
+                    streamData = self.packageRequestForData(streamData, settingsMap);
                     res.status(200).json(streamData);
                 }, function (reason) {
                     console.log('Handle rejected promise (' + reason + ') here.');
                 });
-                var streamData = self.registerSettings(self.simplify(settingsMap), function (result) {
+                var streamData = self.registerSettings(function (result) {
                     promise.resolve(result);
-                });
+                }, self.simplify(settingsMap));
             } else if (eventType == "USR_UNREG") {
                 self.unregisterSettings(self.simplify(settingsMap));
                 res.sendStatus(200);
@@ -141,8 +140,7 @@ var VectorWatchStream = function () {
      * @returns {Object}
      *
      **/
-    this.packageRequestForData = function (pushDataContent, settingsMap, channelLabel) {
-        settingsMap = settingsMap ? settingsMap : {};
+    this.packageRequestForData = function (pushDataContent, channelLabel, update) {
         channelLabel = channelLabel ? channelLabel : "XXX";
 
         if (typeof channelLabel === 'object') {
