@@ -23,6 +23,7 @@ var VectorWatchStream = function () {
     this.portNumber = 3001;
     this.token = "";
     this.streamUUID = "";
+    this.options = true;
     this.defaultSetting = "default";
     /*Private*/
     var pushURL = "http://localhost:8080/VectorCloud/rest/v1/app/push", getChannelData = null;
@@ -99,7 +100,7 @@ var VectorWatchStream = function () {
     this.sendDeliverRequests = function (dataArray) {
         var requestList = [];//this.packageRequestForData(dataObject.data, dataObject.settings)
         dataArray.forEach(function (element) {
-            requestList.push(self.packageRequestForData(element.data, element.settings));
+            requestList.push(self.packageRequestForData(element.data));
         });
         var options = {
             uri: pushURL,
@@ -140,7 +141,9 @@ var VectorWatchStream = function () {
      *
      **/
     this.packageRequestForData = function (pushDataContent, channelLabel) {
-        channelLabel = channelLabel ? channelLabel : "default";
+        if(!this.options) {
+            channelLabel = channelLabel ? channelLabel : "default";
+        }
 
         if (typeof channelLabel === 'object') {
             for (var key in channelLabel) {
