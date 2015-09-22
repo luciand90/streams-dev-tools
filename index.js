@@ -9,12 +9,36 @@ var Promise = require("node-promise").Promise;
 
 var VectorWatchStream = function () {
     /*Public*/
-    this.registerSettings = function () {
+    /** This function is called every time a user adds the stream to a watch face(and selects the desired settings, if needed).
+     Called for public streams
+     * @param resolve {Function} DB insert success callback
+     * @param reject {Function} DB insert fail callback
+     * @param settings {Object} user settings
+     * @returns {null}
+     * */
+    this.registerSettings = function (resolve, reject, settings) {
     };
-    this.unregisterSettings = function () {
+
+    /** This function is called every time a user removes the stream from a watch face.
+     Called for public streams
+     * @param settings {Object} user settings
+     * @returns {null}
+     * */
+    this.unregisterSettings = function (settings) {
     };
-    this.registerUser = function () {
+
+    /** This function is called every time a user adds the stream to a watch face(and selects the desired settings, if needed).
+     Called for public streams
+     * @param resolve {Function} DB insert success callback
+     * @param reject {Function} DB insert fail callback
+     * @param userId {int} User ID
+     * @param settings {Object} user settings
+     * @returns {null}
+     * */
+    this.registerUser = function (resolve, reject, userId, settings) {
     };
+
+
     this.unregisterUser = function () {
     };
     this.updateAllStreams = function () {
@@ -30,7 +54,7 @@ var VectorWatchStream = function () {
     this.dbConnection = null;
     /*Private*/
     var self = this;
-    var pushURL = "http://localhost:8080/VectorCloud/rest/v1/app/push", getChannelData = null;
+    var pushURL = "http://52.16.43.57:8080/VectorCloud/rest/v1/app/push", getChannelData = null;
 
     /*****Methods*****/
 
@@ -89,8 +113,6 @@ var VectorWatchStream = function () {
     this.sendDeliverRequests = function (dataArray) {
         var requestBody = [];
         console.log('dataArray');
-        console.log(dataArray[0][0]);
-        console.log(dataArray[0][1]);
         dataArray.forEach(function (element) {
 
             var packagedData = getStreamDataObject(element[0], wrapSettingsForPush(element[1]), element[1].channelLabel, "update");
@@ -257,8 +279,6 @@ var VectorWatchStream = function () {
                 channelLabel = getKey(settingsMap);
             }
         }
-
-        console.log("cacat");
         console.log(settingsMap);
 
         var deliverRequest = {v: 1, p: []};
@@ -324,9 +344,7 @@ var VectorWatchStream = function () {
                 response.sendStatus(200);
                 break;
             case 'private':
-                self.unregisterUser(function (result) {
-                    promise.resolve(result);
-                }, userId, cleanSettings(settings));
+                self.unregisterUser(userId, cleanSettings(settings));
                 break;
             default:
         }
