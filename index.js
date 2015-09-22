@@ -16,33 +16,32 @@ var VectorWatchStream = function () {
      * @param settings {Object} user settings
      * @returns {null}
      * */
-    this.registerSettings = function (resolve, reject, settings) {
-    };
+    this.registerSettings = function (resolve, reject, settings) {};
 
     /** This function is called every time a user removes the stream from a watch face.
      Called for public streams
      * @param settings {Object} user settings
      * @returns {null}
      * */
-    this.unregisterSettings = function (settings) {
-    };
+    this.unregisterSettings = function (settings) {};
 
     /** This function is called every time a user adds the stream to a watch face(and selects the desired settings, if needed).
-     Called for public streams
+     Called for private streams
      * @param resolve {Function} DB insert success callback
      * @param reject {Function} DB insert fail callback
      * @param userId {int} User ID
      * @param settings {Object} user settings
      * @returns {null}
      * */
-    this.registerUser = function (resolve, reject, userId, settings) {
-    };
+    this.registerUser = function (resolve, reject, userId, settings) {};
 
+    /** This function is called every time a user removes the stream from a watch face.
+     Called for private streams
+     * @param settings {Object} user settings
+     * @returns {null}
+     * */
+    this.unregisterUser = function (settings) {};
 
-    this.unregisterUser = function () {
-    };
-    this.updateAllStreams = function () {
-    };
     this.portNumber = 3000;
     this.token = "";
     this.streamUUID = "";
@@ -94,6 +93,10 @@ var VectorWatchStream = function () {
         return router;
     };
 
+    /** Starts ad configures the express framework.
+     * @param initAction {Function} Called after the server starts listening.
+     * @returns {null}
+     * */
     this.startServer = function (initAction) {
         server.use(express.static(path.join(__dirname, 'public')));
         server.use(bodyParser.urlencoded({extended: true})); //support x-www-form-urlencoded
@@ -106,8 +109,7 @@ var VectorWatchStream = function () {
     };
 
     /** Sends update request to Vector Cloud, with all the information needed.
-     * @param dataArray {Array}
-     * @param settings {Object}
+     * @param dataArray {Array} The array elements contain the info that will be displayed on the watch and the coresponding settings - [data, settings]
      * @returns {null}
      * */
     this.sendDeliverRequests = function (dataArray) {
@@ -157,9 +159,9 @@ var VectorWatchStream = function () {
     };
 
     /** Store settings in the DB. On success the resolve() method is called, otherwise the reject(error) method.
-     * @param settings {Object}
-     * @param resolve {Function}
-     * @param reject {Function}
+     * @param settings {Object} User settings
+     * @param resolve {Function} DB insert success callback
+     * @param reject {Function}DB insert fail callback
      * @returns null
      *
      **/
@@ -186,8 +188,8 @@ var VectorWatchStream = function () {
 
     /** Get all the settings stored in the DB. On success the resolve(settingsArray) method is called, otherwise the reject(error) method.
      * The developer can access the returned array in the resolve(settingsArray) callback, as a parameter.
-     * @param resolve {Function}
-     * @param reject {Function}
+     * @param resolve {Function} DB select success callback
+     * @param reject {Function} DB select fail callback
      * @returns null
      *
      **/
@@ -225,9 +227,9 @@ var VectorWatchStream = function () {
     };
 
     /** Delete the given setting from the db
-     * @param settingsMap {Object}
-     * @param resolve {Function}
-     * @param reject {Function}
+     * @param settings {Object} User settings
+     * @param resolve {Function} DB update/delete success callback
+     * @param reject {Function} DB update/delete fail callback
      * @returns null
      *
      **/
@@ -399,5 +401,7 @@ var VectorWatchStream = function () {
             return key;
         }
     }
+    //TODO UnregisterAll + dynamic setting value
+
 };
 module.exports = new VectorWatchStream();
