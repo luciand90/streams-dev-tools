@@ -122,7 +122,7 @@ Methods:
          **/
     sample_stream.deleteSettings (settings, resolve, reject);
     
-###Sample:
+### Sample
 
     sample_stream.streamUUID = "stream";
     sample_stream.streamType = "public";
