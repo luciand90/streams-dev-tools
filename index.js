@@ -369,7 +369,8 @@ var VectorWatchStream = function () {
     }
 
     /** Removes the received settings object overheard so the developer only handles the settings themselves.
-     * @param settingsMap {Object}
+     * @param settings {Object}
+     * @param uniqueLabel {String}
      * @returns {Object}
      *
      **/
@@ -383,7 +384,7 @@ var VectorWatchStream = function () {
     }
 
     /** Removes the received settings object overheard so the developer only handles the settings themselves.
-     * @param settingsMap {Object}
+     * @param settings {Object}
      * @returns {Object}
      *
      **/
