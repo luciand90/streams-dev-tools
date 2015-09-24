@@ -5,107 +5,102 @@ var express = require('express'),
     expressValidator = require('express-validator'),
     request = require('request'),
     mysql = require('mysql');
+util = require('util');
 var Promise = require("node-promise").Promise;
 
+var StreamData = function (data, settings, userId) {
+    this.data = data;
+    this.settings = settings;
+    this.userId = userId;
+};
+
 var VectorWatchStream = function () {
-    /*Public*/
+    /******Public******/
     /** This function is called every time a user adds the stream to a watch face(and selects the desired settings, if needed).
-     Called for public streams
+     * The DB(if the stream has settings that need to be stored) is automatically updated.
+     * When implementing this method the developer must call the 'resolve' function parameter after he retrives/generates the data.
+     *      resolve({data:"..."});
+     * Called for public streams
      * @param resolve {Function} DB insert success callback
      * @param reject {Function} DB insert fail callback
-     * @param settings {Object} user settings
+     * @param settings {Object} User settings
      * @returns {null}
      * */
-    this.registerSettings = function (resolve, reject, settings) {};
+    this.registerSettings = function (resolve, reject, settings) {
+    };
 
     /** This function is called every time a user removes the stream from a watch face.
      Called for public streams
-     * @param settings {Object} user settings
+     * @param settings {Object} User settings
      * @returns {null}
      * */
-    this.unregisterSettings = function (settings) {};
+    this.unregisterSettings = function (settings) {
+    };
 
     /** This function is called every time a user adds the stream to a watch face(and selects the desired settings, if needed).
-     Called for private streams
+     * The DB(if the stream has settings that need to be stored) is automatically updated.
+     * When implementing this method the developer must call the 'resolve' function parameter after he retrives/generates the data.
+     *      resolve({data:"..."});
+     * Called for private streams
      * @param resolve {Function} DB insert success callback
      * @param reject {Function} DB insert fail callback
      * @param userId {int} User ID
      * @param settings {Object} user settings
      * @returns {null}
      * */
-    this.registerUser = function (resolve, reject, userId, settings) {};
+    this.registerUser = function (resolve, reject, userId, settings) {
+    };
 
     /** This function is called every time a user removes the stream from a watch face.
      Called for private streams
      * @param settings {Object} user settings
      * @returns {null}
      * */
-    this.unregisterUser = function (settings) {};
-
-    this.portNumber = 3000;
-    this.token = "";
-    this.streamUUID = "";
-    //Public or private:
-    this.streamType = "";
-
-    this.hasSettings = true;
-    this.defaultSettings = "";
-    this.dbConnection = null;
-    /*Private*/
-    var self = this;
-    var pushURL = "http://52.16.43.57:8080/VectorCloud/rest/v1/app/push", getChannelData = null;
-
-    /*****Methods*****/
-
-    /** Configures and returns a middlewire router instance.
-     * @returns {Object}
-     * */
-    var getServerRouter = function (self) {
-        var router = express.Router();
-        router.use(function (req, res, next) {
-            console.log(req.method, req.url);
-            next();
-        });
-        router.route('/callback').post(function (req, res, next) {
-            req.assert('eventType', 'Event type is required').notEmpty();
-            console.log(JSON.stringify(req.body));
-            var errors = req.validationErrors();
-            if (errors) {
-                console.log("ERRORS encountered");
-                res.status(400).json(errors);
-                return;
-            }
-            console.log("Request passed validation");
-            var eventType = req.body.eventType;
-            var user_id = req.body.userKey;
-            var settingsMap = req.body.configStreamSettings ? req.body.configStreamSettings.userSettingsMap : {};
-            var channelLabel = getKey(settingsMap);
-
-            self.defaultSettings = settingsMap;
-            if (eventType == "USR_REG") {
-                registerHandler(settingsMap, channelLabel, user_id, res);
-            } else if (eventType == "USR_UNREG") {
-                unregisterHandler(settingsMap, user_id, res);
-            } else {
-                return next("No known event");
-            }
-        });
-        return router;
+    this.unregisterUser = function (settings) {
     };
 
-    /** Starts ad configures the express framework.
+    this.dbConnection = null;
+    this.debugMode = false;
+
+    /******Private******/
+    var portNumber = 3500, token, streamUUID, streamType, hasSettings = true, defaultSettings = "", pushURL, self = this;
+    /*****Methods*****/
+
+    /** Receives configuration JSON provided by VectorWatch.
+     * @param propJSON {Object} Called after the server starts listening.
+     * @returns {null}
+     * */
+    this.config = function (propJSON) {
+        if (typeof propJSON != "object" && Object.prototype.toString.call(dataArray) == '[object Array]') {
+            log('warn', "Method expects a JSON Object.");
+        }
+        portNumber = setProp(portNumber, "portNumber", propJSON);
+        token = setProp(token, "token", propJSON);
+        streamUUID = setProp(streamUUID, "streamUUID", propJSON);
+        streamType = setProp(streamType, "streamType", propJSON);
+        hasSettings = setProp(hasSettings, "hasSettings", propJSON);
+        defaultSettings = setProp(defaultSettings, "defaultSettings", propJSON);
+        pushURL = setProp(pushURL, "pushURL", propJSON);
+        if (propJSON.database) {
+            this.dbConnection = establishDBConnection(propJSON.database.host, propJSON.database.user, propJSON.database.password, propJSON.database.database);
+        }
+    };
+
+    /** Starts the express framework.
      * @param initAction {Function} Called after the server starts listening.
      * @returns {null}
      * */
     this.startServer = function (initAction) {
+        if (typeof initAction != "function") {
+            log('log', "Method expects a function.");
+        }
         server.use(express.static(path.join(__dirname, 'public')));
         server.use(bodyParser.urlencoded({extended: true})); //support x-www-form-urlencoded
         server.use(bodyParser.json());
         server.use(expressValidator());
-
-        //now we need to apply our router here
         server.use('/api', getServerRouter(self));
-        server.listen(this.portNumber, initAction);
+        log('log', "Port number:" + portNumber, true);
+        server.listen(portNumber, initAction);
     };
 
     /** Sends update request to Vector Cloud, with all the information needed.
@@ -113,78 +108,36 @@ var VectorWatchStream = function () {
      * @returns {null}
      * */
     this.sendDeliverRequests = function (dataArray) {
+        if (Object.prototype.toString.call(dataArray) != '[object Array]') {
+            log('log', "Method expects an array. Example:[{data:'...', settingsItem:'...'}]");
+        }
         var requestBody = [];
-        console.log('dataArray');
         dataArray.forEach(function (element) {
-
-            var packagedData = getStreamDataObject(element[0], wrapSettingsForPush(element[1]), element[1].channelLabel, "update");
+            var packagedData = getStreamDataObject(element.data, wrapSettingsForPush(element.settingsItem), element.settingsItem.channelLabel, "update");
             requestBody.push({
-                streamUUID: self.streamUUID,
+                streamUUID: streamUUID,
                 streamData: packagedData,
-                settings: wrapSettingsForPush(element[1])
+                settings: wrapSettingsForPush(element.settingsItem)
             });
 
         });
-        console.log(requestBody);
+        log('log', "The data is sent to VectorCoud.", true);
+        log('log', requestBody, this.debugMode);
         var options = {
             uri: pushURL,
             method: 'POST',
             json: requestBody,
-            headers: {"Authorization": this.token}
+            headers: {"Authorization": token}
         };
         request(options, function (error, response, body) {
             if (!error && response.statusCode == 200) {
-                console.log(body);
+                log('log', body, this.debugMode);
             } else {
-                console.log(error + " " + JSON.stringify(body));
+                log('log', error, this.debugMode);
             }
         });
     };
 
-    /** Initialise a mysql db connection
-     * @param host {String}
-     * @param user {String}
-     * @param password {String}
-     * @param database {String}
-     * @returns {null}
-     * */
-    this.establishDBConnection = function (host, user, password, database) {
-        this.dbConnection = mysql.createConnection({
-            host: host,
-            user: user,
-            password: password,
-            database: database
-        });
-        return this.dbConnection;
-    };
-
-    /** Store settings in the DB. On success the resolve() method is called, otherwise the reject(error) method.
-     * @param settings {Object} User settings
-     * @param resolve {Function} DB insert success callback
-     * @param reject {Function}DB insert fail callback
-     * @returns null
-     *
-     **/
-    this.storeSettings = function (settings, resolve, reject) {
-        var settingsText = JSON.stringify(wrapSettingsForDB(settings, settings.channelLabel));
-        this.dbConnection.query("INSERT INTO Settings (channelLabel, settings) VALUES (?, ?) ON DUPLICATE KEY UPDATE count = count+1", [settings.channelLabel, settingsText], function (err) {
-            if (err) {
-                console.log(err);
-                if (reject) {
-                    reject(err);
-                } else {
-                    console.log('No callback');
-                }
-            } else {
-                console.log("Setting table updated.");
-                if (resolve) {
-                    resolve();
-                } else {
-                    console.log('No callback');
-                }
-            }
-        });
-    };
 
     /** Get all the settings stored in the DB. On success the resolve(settingsArray) method is called, otherwise the reject(error) method.
      * The developer can access the returned array in the resolve(settingsArray) callback, as a parameter.
@@ -193,19 +146,17 @@ var VectorWatchStream = function () {
      * @returns null
      *
      **/
-    this.retrieveSettings = function (resolve, reject) {
+    this.retrieveSettings = function retrieveSettings(resolve, reject) {
         var settingsArray = [];
         this.dbConnection.query("SELECT settings FROM Settings", function (err, rows) {
             if (err) {
-                console.log(err);
+                log('warn', err, self.debugMode);
                 if (reject) {
                     reject(err);
                 }
             } else {
                 var settingsArray = [], settings, temp;
-                console.log(rows);
                 rows.forEach(function (element) {
-
                     settings = JSON.parse(element.settings);
                     temp = {};
                     for (setting in settings) {
@@ -220,11 +171,94 @@ var VectorWatchStream = function () {
                 if (resolve) {
                     resolve(settingsArray);
                 } else {
-                    console.log('No callback');
+                    log('log', 'No callback', self.debugMode);
                 }
             }
         });
     };
+
+
+    /***********PRIVATE METHODS************/
+    /** Configures and returns a middlewire router instance.
+     * @returns {Object}
+     * */
+    var getServerRouter = function (self) {
+        var router = express.Router();
+        router.use(function (req, res, next) {
+            log('log', req.method + '' + req.url, self.debugMode);
+            next();
+        });
+        router.route('/callback').post(function (req, res, next) {
+            req.assert('eventType', 'Event type is required').notEmpty();
+            log('log', req.body, self.debugMode);
+            var errors = req.validationErrors();
+            if (errors) {
+                log('warn', "Vaidation errors encountered", self.debugMode);
+                res.status(400).json(errors);
+                return;
+            }
+            log('log', "Request passed validation", self.debugMode);
+            var eventType = req.body.eventType;
+            var user_id = req.body.userKey;
+            var settingsMap = req.body.configStreamSettings ? req.body.configStreamSettings.userSettingsMap : {};
+            var channelLabel = getKey(settingsMap);
+
+            defaultSettings = settingsMap;
+            if (eventType == "USR_REG") {
+                registerHandler(settingsMap, channelLabel, user_id, res);
+            } else if (eventType == "USR_UNREG") {
+                unregisterHandler(settingsMap, user_id, res);
+            } else {
+                return next("No known event");
+            }
+        });
+        return router;
+    };
+
+    /** Initialise a mysql db connection
+     * @param host {String}
+     * @param user {String}
+     * @param password {String}
+     * @param database {String}
+     * @returns {null}
+     * */
+    var establishDBConnection = function (host, user, password, database) {
+        self.dbConnection = mysql.createConnection({
+            host: host,
+            user: user,
+            password: password,
+            database: database
+        });
+        return self.dbConnection;
+    };
+
+    /** Store settings in the DB. On success the resolve() method is called, otherwise the reject(error) method.
+     * @param settings {Object} User settings
+     * @param resolve {Function} DB insert success callback
+     * @param reject {Function}DB insert fail callback
+     * @returns null
+     *
+     **/
+    function storeSettingsItem(settings, resolve, reject) {
+        var settingsText = JSON.stringify(wrapSettingsForDB(settings, settings.channelLabel));
+        self.dbConnection.query("INSERT INTO Settings (channelLabel, settings) VALUES (?, ?) ON DUPLICATE KEY UPDATE count = count+1", [settings.channelLabel, settingsText], function (err) {
+            if (err) {
+                log('warn', err, self.debugMode);
+                if (reject) {
+                    reject(err);
+                } else {
+                    log('log', 'No callback', self.debugMode);
+                }
+            } else {
+                log('log', "Setting table updated.", self.debugMode);
+                if (resolve) {
+                    resolve();
+                } else {
+                    log('log', 'No callback', self.debugMode);
+                }
+            }
+        });
+    }
 
     /** Delete the given setting from the db
      * @param settings {Object} User settings
@@ -233,35 +267,35 @@ var VectorWatchStream = function () {
      * @returns null
      *
      **/
-    this.deleteSettings = function (settings, resolve, reject) {
-        this.dbConnection.query("UPDATE Settings SET count=count-1 WHERE channelLabel=?", [settings.channelLabel], function (err) {
+    function deleteSettings(settings, resolve, reject) {
+        self.dbConnection.query("UPDATE Settings SET count=count-1 WHERE channelLabel=?", [settings.channelLabel], function (err) {
             if (err) {
-                console.log(err);
+                log('warn', err, self.debugMode);
                 if (reject) {
                     reject(err);
                 }
             } else {
                 self.dbConnection.query("DELETE FROM Settings WHERE count <= 0", function (err) {
                     if (err) {
-                        console.log(err);
+                        log('warn', err, self.debugMode);
                         if (reject) {
                             reject(err);
                         } else {
-                            console.log('No callback');
+                            log('log', 'No callback', self.debugMode);
                         }
                     } else {
-                        console.log("Setting table updated.");
+                        log('log', "Setting table updated.", self.debugMode);
                         if (resolve) {
                             resolve();
                         } else {
-                            console.log('No callback');
+                            log('log', 'No callback', self.debugMode);
                         }
                     }
                 });
             }
         });
-    };
-    /***********PRIVATE METHODS************/
+    }
+
     /** Set the function that returns the stream value for a given setting/settings
      * @param pushDataContent {String/int}
      * @param settingsMap {Object}
@@ -270,29 +304,25 @@ var VectorWatchStream = function () {
      *
      **/
     function getStreamDataObject(pushDataContent, settingsMap, channelLabel) {
-        if (self.hasSettings) {
-            console.log('test');
+        if (hasSettings) {
             if (!channelLabel) {
                 channelLabel = settingsMap.channelLabel;
             }
         } else {
-            settingsMap = self.defaultSettings;
+            settingsMap = defaultSettings;
             if (channelLabel == null) {
                 channelLabel = getKey(settingsMap);
             }
         }
-        console.log(settingsMap);
-
         var deliverRequest = {v: 1, p: []};
         if (pushDataContent != null) {
             pushDataContent = {
                 type: 3,
-                streamUUID: self.streamUUID,
+                streamUUID: streamUUID,
                 channelLabel: channelLabel,
                 d: pushDataContent
             };
             deliverRequest.p.push(pushDataContent);
-            //deliverRequest.settings = settingsMap;
         }
         return deliverRequest;
     }
@@ -307,26 +337,32 @@ var VectorWatchStream = function () {
     function registerHandler(settingsMap, channelLabel, userId, response) {
         var promise = new Promise();
         promise.then(function (streamData) {
-            console.log("Registration successfull, the response containing the stream data is being sent");
-            streamData = getStreamDataObject(streamData, settingsMap, channelLabel);
+            log('log', "Registration successfull, the response containing " + streamData.data + " is being sent", true);
+            streamData = getStreamDataObject(streamData.data, settingsMap, channelLabel);
             response.status(200).json(streamData);
         }, function (reason, statusCode) {
             statusCode = statusCode ? statusCode : 400;
-            console.log("Registration unsuccessfull, the response containing the error message is being sent");
+            log('log', "Registration unsuccessfull, the response containing the error message is being sent", true);
             response.status(statusCode).json(reason);
         });
-        switch (self.streamType) {
+        switch (streamType) {
             case "public":
-                self.registerSettings(function (result) {
-                    promise.resolve(result);
-                }, function (error) {
-                    promise.reject(error);
-                }, cleanSettings(settingsMap));
+                storeSettingsItem(cleanSettings(settingsMap),
+                    function () {
+                        /*Db INSERT success: the used defined function is being called*/
+                        self.registerSettings(function (result) {
+                            promise.resolve(result);
+                        }, function (error) {
+                            promise.reject(error);
+                        }, cleanSettings(settingsMap));
+                    },
+                    function () {
+                        /*Db INSERT failed*/
+                        log('log', "Db INSERT failed", true);
+                    });
                 break;
             case 'private':
-                self.registerUser(function (result) {
-                    promise.resolve(result);
-                }, userId, cleanSettings(settingsMap));
+                //TODO
                 break;
             default:
         }
@@ -340,13 +376,22 @@ var VectorWatchStream = function () {
      *
      **/
     function unregisterHandler(settings, userId, response) {
-        switch (self.streamType) {
+        switch (streamType) {
             case "public":
-                self.unregisterSettings(cleanSettings(settings));
-                response.sendStatus(200);
+                deleteSettings(cleanSettings(settings),
+                    function () {
+                        /*Db DELETE success: the used defined function is being called*/
+                        self.unregisterSettings(cleanSettings(settings));
+                        response.sendStatus(200);
+                    },
+                    function () {
+                        /*Db INSERT failed*/
+                        log('log', "Db DELETE failed", true);
+                    });
+
                 break;
             case 'private':
-                self.unregisterUser(userId, cleanSettings(settings));
+                //TODO
                 break;
             default:
         }
@@ -402,6 +447,22 @@ var VectorWatchStream = function () {
             return key;
         }
     }
+
+    function log(type, text, force) {
+        if (force) {
+            console[type](util.inspect(text, {colors: true, depth: null}));
+        }
+    }
+
+    function setProp(property, propertyName, propertiesJSON) {
+        if (propertiesJSON.hasOwnProperty(propertyName) && propertiesJSON[propertyName]) {
+            property = propertiesJSON[propertyName];
+        } else {
+            log('log', propertyName + " not set");
+        }
+        return property;
+    }
+
     //TODO UnregisterAll + dynamic setting value
 
 };
