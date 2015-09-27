@@ -7,9 +7,6 @@ To install the latest version available on NPM:
 
     npm install stream-dev-tools --save
 
-
-#### Usage
-
     var sample_stream = require('stream-dev-tools');
     
 ### Configuration

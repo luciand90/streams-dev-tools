@@ -63,7 +63,7 @@ var VectorWatchStream = function () {
     this.debugMode = false;
 
     /******Private******/
-    var portNumber = 3500, token, streamUUID, streamType, hasSettings = true, defaultSettings = "", pushURL, self = this;
+    var portNumber = 3500, token, streamUID, streamType, hasSettings = true, defaultSettings = "", pushURL="http://localhost:8080/VectorCloud/rest/v1/app/push", self = this;//52.16.43.57
     /*****Methods*****/
 
     /** Receives configuration JSON provided by VectorWatch.
@@ -76,11 +76,10 @@ var VectorWatchStream = function () {
         }
         portNumber = setProp(portNumber, "portNumber", propJSON);
         token = setProp(token, "token", propJSON);
-        streamUUID = setProp(streamUUID, "streamUUID", propJSON);
+        streamUID = setProp(streamUID, "streamUID", propJSON);
         streamType = setProp(streamType, "streamType", propJSON);
         hasSettings = setProp(hasSettings, "hasSettings", propJSON);
         defaultSettings = setProp(defaultSettings, "defaultSettings", propJSON);
-        pushURL = setProp(pushURL, "pushURL", propJSON);
         if (propJSON.database) {
             this.dbConnection = establishDBConnection(propJSON.database.host, propJSON.database.user, propJSON.database.password, propJSON.database.database);
         }
@@ -115,7 +114,7 @@ var VectorWatchStream = function () {
         dataArray.forEach(function (element) {
             var packagedData = getStreamDataObject(element.data, wrapSettingsForPush(element.settingsItem), element.settingsItem.channelLabel, "update");
             requestBody.push({
-                streamUUID: streamUUID,
+                streamUUID: streamUID,
                 streamData: packagedData,
                 settings: wrapSettingsForPush(element.settingsItem)
             });
@@ -318,7 +317,7 @@ var VectorWatchStream = function () {
         if (pushDataContent != null) {
             pushDataContent = {
                 type: 3,
-                streamUUID: streamUUID,
+                streamUUID: streamUID,
                 channelLabel: channelLabel,
                 d: pushDataContent
             };

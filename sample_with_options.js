@@ -1,19 +1,18 @@
 var sample_stream = require('./index.js');
 var configJSON = {
-    streamUUID: "24673c3e7f44534ce255d2ddc8460817",
+    streamUID: "24673c3e7f44534ce255d2ddc8460817",
     streamType: "public",
     hasSettings: true,
     token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ7XCJ1c2VySURcIjoxLFwicm9sZVwiOlwiQURNSU5cIixcIndhdGNoSWRcIjotMX0iLCJpc3MiOiJodHRwczpcL1wvdmVjdG9yd2F0Y2guY29tIiwiaWF0IjoxNDQwMDc0MTYyfQ.U_aMr1YSnrQuN9UqdIyc7wfcDSheqp0Acy_Zo3EzyRQ",
-    pushURL: "http://52.16.43.57:8080/VectorCloud/rest/v1/app/push",
     portNumber: "3000",
     database: {
-        host: "mysqlfreedb.cwacxqosq1ch.eu-west-1.rds.amazonaws.com",
-        user: "admin",
-        password: "anaaremere",
-        database: "VECTOR_STREAMS_SAMPLE"
+        host: "***",
+        user: "***",
+        password: "***",
+        database: "***"
     }
 };
-
+//////TODO test register/unregister!!!!!!!!!!!!!!!!
 sample_stream.config(configJSON);
 sample_stream.debugMode = true;
 
@@ -47,7 +46,7 @@ sample_stream.registerSettings = function (resolve, reject, settings) {
     console.log("Registering settings:");
     console.log(settings);
     counter++;
-    resolve({data: getData(settings), settingsItem: settings});
+    resolve({data: getData(settings)});
 };
 
 // This function is called every time a user removes the stream from a watch face
