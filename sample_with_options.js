@@ -1,20 +1,14 @@
 var sample_stream = require('./index.js');
 var configJSON = {
-    streamUID: "***",
+    streamUID: "24673c3e7f44534ce255d2ddc8460817",
     streamType: "public",
     hasSettings: true,
-    token: "***",
-    portNumber: "3000",
-    database: {
-        host: "***",
-        user: "***",
-        password: "***",
-        database: "***"
-    }
+    token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ7XCJ1c2VySURcIjoxLFwicm9sZVwiOlwiQURNSU5cIixcIndhdGNoSWRcIjotMX0iLCJpc3MiOiJodHRwczpcL1wvdmVjdG9yd2F0Y2guY29tIiwiaWF0IjoxNDQwMDc0MTYyfQ.U_aMr1YSnrQuN9UqdIyc7wfcDSheqp0Acy_Zo3EzyRQ",
+    portNumber: "3000"
 };
 //////TODO test register/unregister!!!!!!!!!!!!!!!!
 sample_stream.config(configJSON);
-sample_stream.debugMode = true;
+//sample_stream.debugMode = true;
 
 /*************Custom code**********/
 var counter = 0;
@@ -44,16 +38,12 @@ function getData(element) {
 
 // This function is called every time a user adds the stream to a watch face
 sample_stream.registerSettings = function (resolve, reject, settings) {
-    console.log("Registering settings:");
-    console.log(settings);
     counter++;
     resolve({data: getData(settings)});
 };
 
 // This function is called every time a user removes the stream from a watch face
 sample_stream.unregisterSettings = function (settings) {
-    console.log("Unregistering settings:");
-    console.log(settings);
     // success
     counter--;
     updateAll();

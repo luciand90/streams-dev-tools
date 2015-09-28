@@ -63,7 +63,7 @@ var VectorWatchStream = function () {
     this.debugMode = false;
 
     /******Private******/
-    var portNumber = 3500, token, streamUID, streamType, hasSettings = true, defaultSettings = "", pushURL = "http://localhost:8080/VectorCloud/rest/v1/app/push", self = this;//52.16.43.57
+    var portNumber = 3500, token, streamUID, streamType, localStorage, hasSettings = true, devMode = false, defaultSettings = "", pushURL = "http://localhost:8080/VectorCloud/rest/v1/app/push", self = this;//52.16.43.57
     /*****Methods*****/
 
     /** Receives configuration JSON provided by VectorWatch.
@@ -82,6 +82,9 @@ var VectorWatchStream = function () {
         defaultSettings = setProp(defaultSettings, "defaultSettings", propJSON);
         if (propJSON.database) {
             this.dbConnection = establishDBConnection(propJSON.database.host, propJSON.database.user, propJSON.database.password, propJSON.database.database);
+        } else {
+            devMode = true;
+            localStorage = [];
         }
     };
 
@@ -140,7 +143,7 @@ var VectorWatchStream = function () {
 
     /** Get all the settings stored in the DB. On success the resolve(settingsArray) method is called, otherwise the reject(error) method.
      * The developer can access the returned array in the resolve(settingsArray) callback, as a parameter.
-       Example: sample_stream.retrieveSettings(function (settingsArray) {
+     Example: sample_stream.retrieveSettings(function (settingsArray) {
                     console.log(settingsArray); -> [{"City":"Bucharest", ...},{"City":"New York", ...}, ...]
                 });
      * @param resolve {Function} DB select success callback
@@ -149,34 +152,38 @@ var VectorWatchStream = function () {
      *
      **/
     this.retrieveSettings = function (resolve, reject) {
-        var settingsArray = [];
-        this.dbConnection.query("SELECT settings FROM Settings", function (err, rows) {
-            if (err) {
-                log('warn', err, self.debugMode);
-                if (reject) {
-                    reject(err);
-                }
-            } else {
-                var settingsArray = [], settings, temp;
-                rows.forEach(function (element) {
-                    settings = JSON.parse(element.settings);
-                    temp = {};
-                    for (setting in settings) {
-                        if (setting != 'channelLabel') {
-                            temp[setting] = settings[setting].name;
-                        } else {
-                            temp[setting] = settings[setting];
-                        }
+        if (devMode) {
+            resolve(localStorage);
+        } else {
+            var settingsArray = [];
+            this.dbConnection.query("SELECT settings FROM Settings", function (err, rows) {
+                if (err) {
+                    log('warn', err, self.debugMode);
+                    if (reject) {
+                        reject(err);
                     }
-                    settingsArray.push(temp);
-                });
-                if (resolve) {
-                    resolve(settingsArray);
                 } else {
-                    log('log', 'No callback', self.debugMode);
+                    var settingsArray = [], settings, temp;
+                    rows.forEach(function (element) {
+                        settings = JSON.parse(element.settings);
+                        temp = {};
+                        for (setting in settings) {
+                            if (setting != 'channelLabel') {
+                                temp[setting] = settings[setting].name;
+                            } else {
+                                temp[setting] = settings[setting];
+                            }
+                        }
+                        settingsArray.push(temp);
+                    });
+                    if (resolve) {
+                        resolve(settingsArray);
+                    } else {
+                        log('log', 'No callback', self.debugMode);
+                    }
                 }
-            }
-        });
+            });
+        }
     };
 
     /** Delete al settings from the DB.
@@ -186,23 +193,27 @@ var VectorWatchStream = function () {
      *
      **/
     this.dbCleanUp = function (resolve, reject) {
-        self.dbConnection.query("DELETE FROM Settings", function (err) {
-            if (err) {
-                log('warn', err, self.debugMode);
-                if (reject) {
-                    reject(err);
+        if (devMode) {
+            localStorage = [];
+        } else {
+            self.dbConnection.query("DELETE FROM Settings", function (err) {
+                if (err) {
+                    log('warn', err, self.debugMode);
+                    if (reject) {
+                        reject(err);
+                    } else {
+                        log('log', 'No callback', self.debugMode);
+                    }
                 } else {
-                    log('log', 'No callback', self.debugMode);
+                    log('log', "Deleted all rows", self.debugMode);
+                    if (resolve) {
+                        resolve();
+                    } else {
+                        log('log', 'No callback', self.debugMode);
+                    }
                 }
-            } else {
-                log('log', "Deleted all rows", self.debugMode);
-                if (resolve) {
-                    resolve();
-                } else {
-                    log('log', 'No callback', self.debugMode);
-                }
-            }
-        });
+            });
+        }
     };
 
 
@@ -269,23 +280,36 @@ var VectorWatchStream = function () {
      **/
     function storeSettingsItem(settings, resolve, reject) {
         var settingsText = JSON.stringify(wrapSettingsForDB(settings, settings.channelLabel));
-        self.dbConnection.query("INSERT INTO Settings (channelLabel, settings) VALUES (?, ?) ON DUPLICATE KEY UPDATE count = count+1", [settings.channelLabel, settingsText], function (err) {
-            if (err) {
-                log('warn', err, self.debugMode);
-                if (reject) {
-                    reject(err);
-                } else {
-                    log('log', 'No callback', self.debugMode);
-                }
-            } else {
-                log('log', "Setting table updated.", self.debugMode);
-                if (resolve) {
-                    resolve();
-                } else {
-                    log('log', 'No callback', self.debugMode);
-                }
+        if (devMode) {
+            if (!isInLocalStorage(settings)) {
+                localStorage.push(settings);
             }
-        });
+            console.log("localStorage");
+            console.log(localStorage);
+            if (resolve) {
+                resolve();
+            } else {
+                log('log', 'No callback', self.debugMode);
+            }
+        } else {
+            self.dbConnection.query("INSERT INTO Settings (channelLabel, settings) VALUES (?, ?) ON DUPLICATE KEY UPDATE count = count+1", [settings.channelLabel, settingsText], function (err) {
+                if (err) {
+                    log('warn', err, self.debugMode);
+                    if (reject) {
+                        reject(err);
+                    } else {
+                        log('log', 'No callback', self.debugMode);
+                    }
+                } else {
+                    log('log', "Setting table updated.", self.debugMode);
+                    if (resolve) {
+                        resolve();
+                    } else {
+                        log('log', 'No callback', self.debugMode);
+                    }
+                }
+            });
+        }
     }
 
     /** Delete the given setting from the db
@@ -296,32 +320,38 @@ var VectorWatchStream = function () {
      *
      **/
     function deleteSettings(settings, resolve, reject) {
-        self.dbConnection.query("UPDATE Settings SET count=count-1 WHERE channelLabel=?", [settings.channelLabel], function (err) {
-            if (err) {
-                log('warn', err, self.debugMode);
-                if (reject) {
-                    reject(err);
-                }
-            } else {
-                self.dbConnection.query("DELETE FROM Settings WHERE count <= 0", function (err) {
-                    if (err) {
-                        log('warn', err, self.debugMode);
-                        if (reject) {
-                            reject(err);
-                        } else {
-                            log('log', 'No callback', self.debugMode);
-                        }
-                    } else {
-                        log('log', "Setting table updated.", self.debugMode);
-                        if (resolve) {
-                            resolve();
-                        } else {
-                            log('log', 'No callback', self.debugMode);
-                        }
-                    }
-                });
+        if (devMode) {
+            if (isInLocalStorage(settings)) {
+                localStorage.pop(settings);
             }
-        });
+        } else {
+            self.dbConnection.query("UPDATE Settings SET count=count-1 WHERE channelLabel=?", [settings.channelLabel], function (err) {
+                if (err) {
+                    log('warn', err, self.debugMode);
+                    if (reject) {
+                        reject(err);
+                    }
+                } else {
+                    self.dbConnection.query("DELETE FROM Settings WHERE count <= 0", function (err) {
+                        if (err) {
+                            log('warn', err, self.debugMode);
+                            if (reject) {
+                                reject(err);
+                            } else {
+                                log('log', 'No callback', self.debugMode);
+                            }
+                        } else {
+                            log('log', "Setting table updated.", self.debugMode);
+                            if (resolve) {
+                                resolve();
+                            } else {
+                                log('log', 'No callback', self.debugMode);
+                            }
+                        }
+                    });
+                }
+            });
+        }
     }
 
     /** Set the function that returns the stream value for a given setting/settings
@@ -491,7 +521,24 @@ var VectorWatchStream = function () {
         return property;
     }
 
-    //TODO UnregisterAll + dynamic setting value
+    function isInLocalStorage(settingsItem) {
+        var bool = false;
+        for (var i = 0; i < localStorage.length; i++) {
+            bool = true;
+            for (key in settingsItem) {
+                if (localStorage[i][key].indexOf(settingsItem[key]) == -1) {
 
+                    bool = false;
+                }
+            }
+
+            if (bool) {
+                break;
+
+            }
+        }
+        return bool;
+
+    }
 };
 module.exports = new VectorWatchStream();
