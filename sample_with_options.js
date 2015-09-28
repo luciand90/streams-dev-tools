@@ -6,10 +6,10 @@ var configJSON = {
     token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ7XCJ1c2VySURcIjoxLFwicm9sZVwiOlwiQURNSU5cIixcIndhdGNoSWRcIjotMX0iLCJpc3MiOiJodHRwczpcL1wvdmVjdG9yd2F0Y2guY29tIiwiaWF0IjoxNDQwMDc0MTYyfQ.U_aMr1YSnrQuN9UqdIyc7wfcDSheqp0Acy_Zo3EzyRQ",
     portNumber: "3000",
     database: {
-        host: "***",
-        user: "***",
-        password: "***",
-        database: "***"
+        host: "mysqlfreedb.cwacxqosq1ch.eu-west-1.rds.amazonaws.com",
+        user: "admin",
+        password: "anaaremere",
+        database: "VECTOR_STREAMS_SAMPLE"
     }
 };
 //////TODO test register/unregister!!!!!!!!!!!!!!!!
@@ -25,6 +25,7 @@ function updateAll() {
             pushArray.push({data: getData(element), settingsItem: element});
         });
         sample_stream.sendDeliverRequests(pushArray);
+        sample_stream.dbCleanUp();
     });
 }
 

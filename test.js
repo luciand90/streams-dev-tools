@@ -1,3 +1,4 @@
+//////TODO test register/unregister!!!!!!!!!!!!!!!!
 sample_stream.storeSettings({city: "Bucharest", channelLabel: "uniqueLabel"}, function () {
     sample_stream.retrieveSettings(function (settingsArray) {
         console.log(settingsArray);

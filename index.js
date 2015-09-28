@@ -63,7 +63,7 @@ var VectorWatchStream = function () {
     this.debugMode = false;
 
     /******Private******/
-    var portNumber = 3500, token, streamUID, streamType, hasSettings = true, defaultSettings = "", pushURL="http://localhost:8080/VectorCloud/rest/v1/app/push", self = this;//52.16.43.57
+    var portNumber = 3500, token, streamUID, streamType, hasSettings = true, defaultSettings = "", pushURL = "http://localhost:8080/VectorCloud/rest/v1/app/push", self = this;//52.16.43.57
     /*****Methods*****/
 
     /** Receives configuration JSON provided by VectorWatch.
@@ -112,7 +112,7 @@ var VectorWatchStream = function () {
         }
         var requestBody = [];
         dataArray.forEach(function (element) {
-            var packagedData = getStreamDataObject(element.data, wrapSettingsForPush(element.settingsItem), element.settingsItem.channelLabel, "update");
+            var packagedData = getStreamDataObject(element.data, wrapSettingsForPush(element.settingsItem), element.settingsItem.channelLabel);
             requestBody.push({
                 streamUUID: streamUID,
                 streamData: packagedData,
@@ -130,9 +130,9 @@ var VectorWatchStream = function () {
         };
         request(options, function (error, response, body) {
             if (!error && response.statusCode == 200) {
-                log('log', body, this.debugMode);
+                log('log', body, self.debugMode);
             } else {
-                log('log', error, this.debugMode);
+                log('log', error, self.debugMode);
             }
         });
     };
@@ -140,12 +140,15 @@ var VectorWatchStream = function () {
 
     /** Get all the settings stored in the DB. On success the resolve(settingsArray) method is called, otherwise the reject(error) method.
      * The developer can access the returned array in the resolve(settingsArray) callback, as a parameter.
+       Example: sample_stream.retrieveSettings(function (settingsArray) {
+                    console.log(settingsArray); -> [{"City":"Bucharest", ...},{"City":"New York", ...}, ...]
+                });
      * @param resolve {Function} DB select success callback
      * @param reject {Function} DB select fail callback
      * @returns null
      *
      **/
-    this.retrieveSettings = function retrieveSettings(resolve, reject) {
+    this.retrieveSettings = function (resolve, reject) {
         var settingsArray = [];
         this.dbConnection.query("SELECT settings FROM Settings", function (err, rows) {
             if (err) {
@@ -169,6 +172,32 @@ var VectorWatchStream = function () {
                 });
                 if (resolve) {
                     resolve(settingsArray);
+                } else {
+                    log('log', 'No callback', self.debugMode);
+                }
+            }
+        });
+    };
+
+    /** Delete al settings from the DB.
+     * @param resolve {Function} DB update/delete success callback
+     * @param reject {Function} DB update/delete fail callback
+     * @returns null
+     *
+     **/
+    this.dbCleanUp = function (resolve, reject) {
+        self.dbConnection.query("DELETE FROM Settings", function (err) {
+            if (err) {
+                log('warn', err, self.debugMode);
+                if (reject) {
+                    reject(err);
+                } else {
+                    log('log', 'No callback', self.debugMode);
+                }
+            } else {
+                log('log', "Deleted all rows", self.debugMode);
+                if (resolve) {
+                    resolve();
                 } else {
                     log('log', 'No callback', self.debugMode);
                 }
