@@ -5,7 +5,7 @@ sample_stream.streamUUID = "helloworldStream";
 sample_stream.streamType = "public";
 sample_stream.defaultSettings = {
     "D9533B80884A4604156FDCDD68709936": {
-        "uniqueLabel": "D9533B80884A4604156FDCDD68709936",
+        "uniqueLabel": "***",
         "userSettings": {"default": {"name": "default"}}
     }
 };

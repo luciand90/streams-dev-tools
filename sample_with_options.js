@@ -1,15 +1,15 @@
 var sample_stream = require('./index.js');
 var configJSON = {
-    streamUID: "24673c3e7f44534ce255d2ddc8460817",
+    streamUID: "***",
     streamType: "public",
     hasSettings: true,
-    token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ7XCJ1c2VySURcIjoxLFwicm9sZVwiOlwiQURNSU5cIixcIndhdGNoSWRcIjotMX0iLCJpc3MiOiJodHRwczpcL1wvdmVjdG9yd2F0Y2guY29tIiwiaWF0IjoxNDQwMDc0MTYyfQ.U_aMr1YSnrQuN9UqdIyc7wfcDSheqp0Acy_Zo3EzyRQ",
+    token: "***",
     portNumber: "3000",
     database: {
-        host: "mysqlfreedb.cwacxqosq1ch.eu-west-1.rds.amazonaws.com",
-        user: "admin",
-        password: "anaaremere",
-        database: "VECTOR_STREAMS_SAMPLE"
+        host: "***",
+        user: "***",
+        password: "***",
+        database: "***"
     }
 };
 //////TODO test register/unregister!!!!!!!!!!!!!!!!
