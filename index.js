@@ -48,8 +48,17 @@ var VectorWatchStream = function () {
      * @param settings {Object} user settings
      * @returns {null}
      * */
-    this.registerUser = function (resolve, reject, userId, settings) {
-    };
+    this.registerUser = function (resolve, reject, userId, settings) {};
+
+    /**
+     * This function is called every time the user adds a stream to a watch face, before making any changes to the settings.
+     * When implementing this method, the developer must call the 'resolve' function parameter after he generates the auth method.
+     *      resolve({protocol: 'oauth', version: '1.0', ...});
+     * Called from private stream
+     * @param resolve
+     * @param reject
+     */
+    this.requestAuthMethod = function(resolve, reject) {};
 
     /** This function is called every time a user removes the stream from a watch face.
      Called for private streams
@@ -123,7 +132,7 @@ var VectorWatchStream = function () {
             });
 
         });
-        log('log', "The data is sent to VectorCoud.", true);
+        log('log', "The data is sent to VectorCloud.", true);
         log('log', requestBody, this.debugMode);
         var options = {
             uri: pushURL,
@@ -247,6 +256,8 @@ var VectorWatchStream = function () {
                 registerHandler(settingsMap, channelLabel, user_id, res);
             } else if (eventType == "USR_UNREG") {
                 unregisterHandler(settingsMap, user_id, res);
+            } else if (eventType == "REQ_AUTH") {
+                authHandler(res);
             } else {
                 return next("No known event");
             }
@@ -451,6 +462,42 @@ var VectorWatchStream = function () {
             case 'private':
                 //TODO
                 break;
+            default:
+        }
+    }
+
+    function authHandler(response) {
+        var promise = new Promise();
+        promise.then(
+            function(authMethod) {
+                log('log', "Request auth method successfull, the response containing " + authMethod + " is being sent", true);
+
+                response.status(200).json({
+                    v: 1,
+                    p: authMethod
+                });
+            },
+            function(reason, statusCode) {
+                statusCode = statusCode ? statusCode : 400;
+                log('log', "Request auth method unsuccessfull, the response containing the error message is being sent.", true);
+
+                response.status(statusCode).json(reason);
+            }
+        );
+
+        switch (streamType) {
+            case "public":
+                self.requestAuthMethod(function(result) {
+                    promise.resolve(result);
+                }, function(error) {
+                    promise.reject(error);
+                });
+                break;
+
+            case "private":
+                // TODO
+                break;
+
             default:
         }
     }
