@@ -600,7 +600,7 @@ var VectorWatchStream = function () {
                     promise.resolve(result);
                 }, function (error) {
                     promise.reject(error);
-                }, settingName, searchTerm, settingsMap);
+                }, settingName, searchTerm, cleanSettings(settingsMap));
                 break;
 
             case "private":
