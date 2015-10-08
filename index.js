@@ -58,7 +58,23 @@ var VectorWatchStream = function () {
      * @param resolve
      * @param reject
      */
-    this.requestAuthMethod = function(resolve, reject) {};
+    this.requestAuthMethod = function(resolve, reject) { };
+
+    /**
+     * @param resolve {Function}
+     * @param reject {Function}
+     * @param auth {Object}
+     */
+    this.requestConfig = function(resolve, reject, auth) { };
+
+    /**
+     * @param resolve {Function}
+     * @param reject {Function}
+     * @param settingName {String}
+     * @param searchTerm {String}
+     * @param state {Object}
+     */
+    this.requestOptions = function(resolve, reject, settingName, searchTerm, state) { };
 
     /** This function is called every time a user removes the stream from a watch face.
      Called for private streams
@@ -105,7 +121,6 @@ var VectorWatchStream = function () {
         if (typeof initAction != "function") {
             log('log', "Method expects a function.");
         }
-        server.use(express.static(path.join(__dirname, 'public')));
         server.use(bodyParser.urlencoded({extended: true})); //support x-www-form-urlencoded
         server.use(bodyParser.json());
         server.use(expressValidator());
@@ -250,6 +265,7 @@ var VectorWatchStream = function () {
             var user_id = req.body.userKey;
             var settingsMap = req.body.configStreamSettings ? req.body.configStreamSettings.userSettingsMap : {};
             var channelLabel = getKey(settingsMap);
+            var auth = req.body.auth;
 
             defaultSettings = settingsMap;
             if (eventType == "USR_REG") {
@@ -258,6 +274,14 @@ var VectorWatchStream = function () {
                 unregisterHandler(settingsMap, user_id, res);
             } else if (eventType == "REQ_AUTH") {
                 authHandler(res);
+            } else if (eventType == "REQ_CONFIG") {
+                configHandler(auth, res);
+            } else if (eventType == "REQ_OPTS") {
+                req.assert('settingName', 'Setting name is required').notEmpty();
+
+                var settingName = req.body.settingName;
+                var searchTerm = req.body.searchTerm || '';
+                optionsHandler(settingName, searchTerm, settingsMap, res);
             } else {
                 return next("No known event");
             }
@@ -466,6 +490,9 @@ var VectorWatchStream = function () {
         }
     }
 
+    /**
+     * @param response {Object}
+     */
     function authHandler(response) {
         var promise = new Promise();
         promise.then(
@@ -492,6 +519,88 @@ var VectorWatchStream = function () {
                 }, function(error) {
                     promise.reject(error);
                 });
+                break;
+
+            case "private":
+                // TODO
+                break;
+
+            default:
+        }
+    }
+
+    /**
+     * @param auth {Object}
+     * @param response {Object}
+     */
+    function configHandler(auth, response) {
+        var promise = new Promise();
+        promise.then(
+            function (config) {
+                log('log', "Request stream config successful, the response containing " + config + " is being sent", true);
+
+                response.status(200).json({
+                    v: 1,
+                    p: config
+                });
+            },
+            function (reason, statusCode) {
+                statusCode = statusCode ? statusCode : 400;
+                log('log', "Request config unsuccessful, the response containing the error message is being sent.", true);
+
+                response.status(statusCode).json(reason);
+            }
+        );
+
+        switch (streamType) {
+            case "public":
+                self.requestConfig(function (result) {
+                    promise.resolve(result);
+                }, function (error) {
+                    promise.reject(error);
+                }, auth);
+                break;
+
+            case "private":
+                // TODO
+                break;
+
+            default:
+        }
+    }
+
+    /**
+     * @param settingName {String}
+     * @param searchTerm {String}
+     * @param settingsMap {Object}
+     * @param response {Object}
+     */
+    function optionsHandler(settingName, searchTerm, settingsMap, response) {
+        var promise = new Promise();
+        promise.then(
+            function (options) {
+                log('log', "Request options successful, the response containing " + options + " is being sent", true);
+
+                response.status(200).json({
+                    v: 1,
+                    p: options
+                });
+            },
+            function (reason, statusCode) {
+                statusCode = statusCode ? statusCode : 400;
+                log('log', "Request options unsuccessful, the response containing the error message is being sent.", true);
+
+                response.status(statusCode).json(reason);
+            }
+        );
+
+        switch (streamType) {
+            case "public":
+                self.requestOptions(function (result) {
+                    promise.resolve(result);
+                }, function (error) {
+                    promise.reject(error);
+                }, settingName, searchTerm, settingsMap);
                 break;
 
             case "private":
