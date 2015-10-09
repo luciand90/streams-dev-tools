@@ -146,11 +146,11 @@ var VectorWatchStream = function () {
             json: requestBody,
             headers: {"Authorization": token}
         };
-        request(options, function (error, response, body) {
-            if (!error && response.statusCode == 200) {
+        request(options, function (err, response, body) {
+            if (!err && response.statusCode == 200) {
                 log('log', body, self.debugMode);
             } else {
-                log('log', error, self.debugMode);
+                log('log', err, self.debugMode);
             }
         });
     };
@@ -399,8 +399,8 @@ var VectorWatchStream = function () {
 
                             self.registerSettings(function (result) {
                                 promise.resolve(result);
-                            }, function (error) {
-                                promise.reject(error);
+                            }, function (err) {
+                                promise.reject(err);
                             }, settingsMap, tokens);
                         });
                     },
@@ -475,7 +475,7 @@ var VectorWatchStream = function () {
         switch (streamType) {
             case "public":
                 self.oauthClient.getAuthorizationUrl(function(err, url) {
-                    if (err) return promise.reject(error);
+                    if (err) return promise.reject(err);
 
                     promise.resolve({
                         protocol: self.oauthClient.getProtocolName(),
@@ -519,7 +519,7 @@ var VectorWatchStream = function () {
         switch (streamType) {
             case "public":
                 self.oauthClient.getAccessToken(auth, function(err, tokens) {
-                    if (err) return promise.reject(error);
+                    if (err) return promise.reject(err);
 
                     self.requestConfig(function(result) {
                         promise.resolve(result);
@@ -567,8 +567,8 @@ var VectorWatchStream = function () {
                 self.oauthClient.getAccessToken(state.auth, function(err, tokens) {
                     self.requestOptions(function (result) {
                         promise.resolve(result);
-                    }, function (error) {
-                        promise.reject(error);
+                    }, function (err) {
+                        promise.reject(err);
                     }, settingName, searchTerm, state, tokens);
                 });
                 break;
