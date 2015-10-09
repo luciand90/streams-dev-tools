@@ -4,15 +4,11 @@ var express = require('express'),
     server = express(),
     expressValidator = require('express-validator'),
     request = require('request'),
-    mysql = require('mysql');
-util = require('util');
+    mysql = require('mysql'),
+    util = require('util'),
+    OAuthProvider = require('./lib/OAuthProvider.js');
 var Promise = require("node-promise").Promise;
 
-var StreamData = function (data, settings, userId) {
-    this.data = data;
-    this.settings = settings;
-    this.userId = userId;
-};
 
 var VectorWatchStream = function () {
     /******Public******/
@@ -26,46 +22,21 @@ var VectorWatchStream = function () {
      * @param settings {Object} User settings
      * @returns {null}
      * */
-    this.registerSettings = function (resolve, reject, settings) {
-    };
+    this.registerSettings = function (resolve, reject, settings) { };
 
     /** This function is called every time a user removes the stream from a watch face.
      Called for public streams
      * @param settings {Object} User settings
      * @returns {null}
      * */
-    this.unregisterSettings = function (settings) {
-    };
-
-    /** This function is called every time a user adds the stream to a watch face(and selects the desired settings, if needed).
-     * The DB(if the stream has settings that need to be stored) is automatically updated.
-     * When implementing this method the developer must call the 'resolve' function parameter after he retrives/generates the data.
-     *      resolve({data:"..."});
-     * Called for private streams
-     * @param resolve {Function} DB insert success callback
-     * @param reject {Function} DB insert fail callback
-     * @param userId {int} User ID
-     * @param settings {Object} user settings
-     * @returns {null}
-     * */
-    this.registerUser = function (resolve, reject, userId, settings) {};
-
-    /**
-     * This function is called every time the user adds a stream to a watch face, before making any changes to the settings.
-     * When implementing this method, the developer must call the 'resolve' function parameter after he generates the auth method.
-     *      resolve({protocol: 'oauth', version: '1.0', ...});
-     * Called from private stream
-     * @param resolve
-     * @param reject
-     */
-    this.requestAuthMethod = function(resolve, reject) { };
+    this.unregisterSettings = function (settings) { };
 
     /**
      * @param resolve {Function}
      * @param reject {Function}
-     * @param auth {Object}
+     * @param authTokens {Object}
      */
-    this.requestConfig = function(resolve, reject, auth) { };
+    this.requestConfig = function(resolve, reject, authTokens) { };
 
     /**
      * @param resolve {Function}
@@ -73,22 +44,16 @@ var VectorWatchStream = function () {
      * @param settingName {String}
      * @param searchTerm {String}
      * @param state {Object}
+     * @param authTokens {Object}
      */
-    this.requestOptions = function(resolve, reject, settingName, searchTerm, state) { };
+    this.requestOptions = function(resolve, reject, settingName, searchTerm, state, authTokens) { };
 
-    /** This function is called every time a user removes the stream from a watch face.
-     Called for private streams
-     * @param settings {Object} user settings
-     * @returns {null}
-     * */
-    this.unregisterUser = function (settings) {
-    };
 
     this.dbConnection = null;
     this.debugMode = false;
 
     /******Private******/
-    var portNumber = 3500, token, streamUID, streamType, localStorage, hasSettings = true, devMode = false, defaultSettings = "", pushURL = "http://localhost:8080/VectorCloud/rest/v1/app/push", self = this;//52.16.43.57
+    var portNumber = 3500, token, streamUID, streamType, hasSettings = true, devMode = false, defaultSettings = "", pushURL = "http://localhost:8080/VectorCloud/rest/v1/app/push", self = this;//52.16.43.57
     /*****Methods*****/
 
     /** Receives configuration JSON provided by VectorWatch.
@@ -105,11 +70,34 @@ var VectorWatchStream = function () {
         streamType = setProp(streamType, "streamType", propJSON);
         hasSettings = setProp(hasSettings, "hasSettings", propJSON);
         defaultSettings = setProp(defaultSettings, "defaultSettings", propJSON);
+
         if (propJSON.database) {
             this.dbConnection = establishDBConnection(propJSON.database.host, propJSON.database.user, propJSON.database.password, propJSON.database.database);
+
+            var MysqlStorageProvider = require('./lib/StorageProviders/MysqlStorageProvider.js');
+            this.authStorage = new MysqlStorageProvider({
+                connection: this.dbConnection,
+                table: 'Auth'
+            });
+            this.stateStorage = new MysqlStorageProvider({
+                connection: this.dbConnection,
+                table: 'Settings'
+            });
         } else {
             devMode = true;
             localStorage = [];
+
+            var MemoryStorageProvider = require('./lib/StorageProviders/MemoryStorageProvider.js');
+            this.authStorage = new MemoryStorageProvider();
+            this.stateStorage = new MemoryStorageProvider();
+        }
+
+        if (propJSON.auth) {
+            var auth = propJSON.auth;
+            if (auth.protocol.toLowerCase() != 'oauth') {
+                throw new Error('Unsupported auth protocol.');
+            }
+            this.oauthClient = OAuthProvider.create(this.authStorage, auth);
         }
     };
 
@@ -139,11 +127,12 @@ var VectorWatchStream = function () {
         }
         var requestBody = [];
         dataArray.forEach(function (element) {
-            var packagedData = getStreamDataObject(element.data, wrapSettingsForPush(element.settingsItem), element.settingsItem.channelLabel);
+            var wrappedSettings = wrapSettingsForPush(element.settingsItem);
+            var packagedData = getStreamDataObject(element.data, wrappedSettings, element.settingsItem.channelLabel);
             requestBody.push({
                 streamUUID: streamUID,
                 streamData: packagedData,
-                settings: wrapSettingsForPush(element.settingsItem)
+                settings: wrappedSettings
             });
 
         });
@@ -176,38 +165,25 @@ var VectorWatchStream = function () {
      *
      **/
     this.retrieveSettings = function (resolve, reject) {
-        if (devMode) {
-            resolve(localStorage);
-        } else {
-            var settingsArray = [];
-            this.dbConnection.query("SELECT settings FROM Settings", function (err, rows) {
-                if (err) {
-                    log('warn', err, self.debugMode);
-                    if (reject) {
-                        reject(err);
-                    }
-                } else {
-                    var settingsArray = [], settings, temp;
-                    rows.forEach(function (element) {
-                        settings = JSON.parse(element.settings);
-                        temp = {};
-                        for (setting in settings) {
-                            if (setting != 'channelLabel') {
-                                temp[setting] = settings[setting].name;
-                            } else {
-                                temp[setting] = settings[setting];
-                            }
-                        }
-                        settingsArray.push(temp);
-                    });
-                    if (resolve) {
-                        resolve(settingsArray);
-                    } else {
-                        log('log', 'No callback', self.debugMode);
-                    }
+        this.stateStorage.retrieveAll(function(err, states) {
+            if (err) {
+                log('warn', err, self.debugMode);
+                if (reject) {
+                    reject(err);
                 }
-            });
-        }
+            } else {
+                for (var channelLabel in states) {
+                    var state = states[channelLabel];
+                    state.channelLabel = channelLabel;
+                }
+
+                if (resolve) {
+                    resolve(states);
+                } else {
+                    log('log', 'No callback', self.debugMode);
+                }
+            }
+        });
     };
 
     /** Delete al settings from the DB.
@@ -217,27 +193,23 @@ var VectorWatchStream = function () {
      *
      **/
     this.dbCleanUp = function (resolve, reject) {
-        if (devMode) {
-            localStorage = [];
-        } else {
-            self.dbConnection.query("DELETE FROM Settings", function (err) {
-                if (err) {
-                    log('warn', err, self.debugMode);
-                    if (reject) {
-                        reject(err);
-                    } else {
-                        log('log', 'No callback', self.debugMode);
-                    }
+        this.stateStorage.removeAll(function(err) {
+            if (err) {
+                log('warn', err, self.debugMode);
+                if (reject) {
+                    reject(err);
                 } else {
-                    log('log', "Deleted all rows", self.debugMode);
-                    if (resolve) {
-                        resolve();
-                    } else {
-                        log('log', 'No callback', self.debugMode);
-                    }
+                    log('log', 'No callback', self.debugMode);
                 }
-            });
-        }
+            } else {
+                log('log', "Deleted all rows", self.debugMode);
+                if (resolve) {
+                    resolve();
+                } else {
+                    log('log', 'No callback', self.debugMode);
+                }
+            }
+        });
     };
 
 
@@ -262,16 +234,15 @@ var VectorWatchStream = function () {
             }
             log('log', "Request passed validation", self.debugMode);
             var eventType = req.body.eventType;
-            var user_id = req.body.userKey;
-            var settingsMap = req.body.configStreamSettings ? req.body.configStreamSettings.userSettingsMap : {};
-            var channelLabel = getKey(settingsMap);
+
+            var state = cleanSettings((req.body.configStreamSettings || {}).userSettingsMap || {});
             var auth = req.body.auth;
 
-            defaultSettings = settingsMap;
+            defaultSettings = state;
             if (eventType == "USR_REG") {
-                registerHandler(settingsMap, channelLabel, user_id, res);
+                registerHandler(state, state.channelLabel, res);
             } else if (eventType == "USR_UNREG") {
-                unregisterHandler(settingsMap, user_id, res);
+                unregisterHandler(state, res);
             } else if (eventType == "REQ_AUTH") {
                 authHandler(res);
             } else if (eventType == "REQ_CONFIG") {
@@ -281,7 +252,7 @@ var VectorWatchStream = function () {
 
                 var settingName = req.body.settingName;
                 var searchTerm = req.body.searchTerm || '';
-                optionsHandler(settingName, searchTerm, settingsMap, res);
+                optionsHandler(settingName, searchTerm, state, res);
             } else {
                 return next("No known event");
             }
@@ -314,37 +285,23 @@ var VectorWatchStream = function () {
      *
      **/
     function storeSettingsItem(settings, resolve, reject) {
-        var settingsText = JSON.stringify(wrapSettingsForDB(settings, settings.channelLabel));
-        if (devMode) {
-            if (!isInLocalStorage(settings)) {
-                localStorage.push(settings);
-            }
-            console.log("localStorage");
-            console.log(localStorage);
-            if (resolve) {
-                resolve();
-            } else {
-                log('log', 'No callback', self.debugMode);
-            }
-        } else {
-            self.dbConnection.query("INSERT INTO Settings (channelLabel, settings) VALUES (?, ?) ON DUPLICATE KEY UPDATE count = count+1", [settings.channelLabel, settingsText], function (err) {
-                if (err) {
-                    log('warn', err, self.debugMode);
-                    if (reject) {
-                        reject(err);
-                    } else {
-                        log('log', 'No callback', self.debugMode);
-                    }
+        self.stateStorage.store(settings.channelLabel, settings, function(err) {
+            if (err) {
+                log('warn', err, self.debugMode);
+                if (reject) {
+                    reject(err);
                 } else {
-                    log('log', "Setting table updated.", self.debugMode);
-                    if (resolve) {
-                        resolve();
-                    } else {
-                        log('log', 'No callback', self.debugMode);
-                    }
+                    log('log', 'No callback', self.debugMode);
                 }
-            });
-        }
+            } else {
+                log('log', "Setting table updated.", self.debugMode);
+                if (resolve) {
+                    resolve();
+                } else {
+                    log('log', 'No callback', self.debugMode);
+                }
+            }
+        });
     }
 
     /** Delete the given setting from the db
@@ -355,38 +312,23 @@ var VectorWatchStream = function () {
      *
      **/
     function deleteSettings(settings, resolve, reject) {
-        if (devMode) {
-            if (isInLocalStorage(settings)) {
-                localStorage.pop(settings);
-            }
-        } else {
-            self.dbConnection.query("UPDATE Settings SET count=count-1 WHERE channelLabel=?", [settings.channelLabel], function (err) {
-                if (err) {
-                    log('warn', err, self.debugMode);
-                    if (reject) {
-                        reject(err);
-                    }
+        self.stateStorage.remove(settings.channelLabel, function(err) {
+            if (err) {
+                log('warn', err, self.debugMode);
+                if (reject) {
+                    reject(err);
                 } else {
-                    self.dbConnection.query("DELETE FROM Settings WHERE count <= 0", function (err) {
-                        if (err) {
-                            log('warn', err, self.debugMode);
-                            if (reject) {
-                                reject(err);
-                            } else {
-                                log('log', 'No callback', self.debugMode);
-                            }
-                        } else {
-                            log('log', "Setting table updated.", self.debugMode);
-                            if (resolve) {
-                                resolve();
-                            } else {
-                                log('log', 'No callback', self.debugMode);
-                            }
-                        }
-                    });
+                    log('log', 'No callback', self.debugMode);
                 }
-            });
-        }
+            } else {
+                log('log', "Setting table updated.", self.debugMode);
+                if (resolve) {
+                    resolve();
+                } else {
+                    log('log', 'No callback', self.debugMode);
+                }
+            }
+        });
     }
 
     /** Set the function that returns the stream value for a given setting/settings
@@ -423,11 +365,10 @@ var VectorWatchStream = function () {
     /** Calls the developer defined registration function(registerSettings/registerUser). The developer calls the resolve or reject parameter function depending on the outcome.
      * @param settingsMap {Object}
      * @param channelLabel {String}
-     * @param userId {int}
      * @param response {Object}
      * @returns {null}
      **/
-    function registerHandler(settingsMap, channelLabel, userId, response) {
+    function registerHandler(settingsMap, channelLabel, response) {
         var promise = new Promise();
         promise.then(function (streamData) {
             log('log', "Registration successfull, the response containing " + streamData.data + " is being sent", true);
@@ -440,14 +381,14 @@ var VectorWatchStream = function () {
         });
         switch (streamType) {
             case "public":
-                storeSettingsItem(cleanSettings(settingsMap),
+                storeSettingsItem(settingsMap,
                     function () {
                         /*Db INSERT success: the used defined function is being called*/
                         self.registerSettings(function (result) {
                             promise.resolve(result);
                         }, function (error) {
                             promise.reject(error);
-                        }, cleanSettings(settingsMap));
+                        }, settingsMap);
                     },
                     function () {
                         /*Db INSERT failed*/
@@ -463,18 +404,17 @@ var VectorWatchStream = function () {
 
     /** Calls the developer defined unregistration function(unregisterSettings/unregisterUser). The developer calls the resolve or reject parameter function depending on the outcome.
      * @param settings {Object}
-     * @param userId {int}
      * @param response {Object}
      * @returns {null}
      *
      **/
-    function unregisterHandler(settings, userId, response) {
+    function unregisterHandler(settings, response) {
         switch (streamType) {
             case "public":
-                deleteSettings(cleanSettings(settings),
+                deleteSettings(settings,
                     function () {
                         /*Db DELETE success: the used defined function is being called*/
-                        self.unregisterSettings(cleanSettings(settings));
+                        self.unregisterSettings(settings);
                         response.sendStatus(200);
                     },
                     function () {
@@ -514,10 +454,14 @@ var VectorWatchStream = function () {
 
         switch (streamType) {
             case "public":
-                self.requestAuthMethod(function(result) {
-                    promise.resolve(result);
-                }, function(error) {
-                    promise.reject(error);
+                self.oauthClient.getAuthorizationUrl(function(err, url) {
+                    if (err) return promise.reject(error);
+
+                    promise.resolve({
+                        protocol: self.oauthClient.getProtocolName(),
+                        version: self.oauthClient.getVersion(),
+                        loginUrl: url
+                    });
                 });
                 break;
 
@@ -554,11 +498,15 @@ var VectorWatchStream = function () {
 
         switch (streamType) {
             case "public":
-                self.requestConfig(function (result) {
-                    promise.resolve(result);
-                }, function (error) {
-                    promise.reject(error);
-                }, auth);
+                self.oauthClient.getAccessToken(auth, function(err, tokens) {
+                    if (err) return promise.reject(error);
+
+                    self.requestConfig(function(result) {
+                        promise.resolve(result);
+                    }, function(err) {
+                        promise.reject(err);
+                    }, tokens);
+                });
                 break;
 
             case "private":
@@ -572,10 +520,10 @@ var VectorWatchStream = function () {
     /**
      * @param settingName {String}
      * @param searchTerm {String}
-     * @param settingsMap {Object}
+     * @param state {Object}
      * @param response {Object}
      */
-    function optionsHandler(settingName, searchTerm, settingsMap, response) {
+    function optionsHandler(settingName, searchTerm, state, response) {
         var promise = new Promise();
         promise.then(
             function (options) {
@@ -596,11 +544,13 @@ var VectorWatchStream = function () {
 
         switch (streamType) {
             case "public":
-                self.requestOptions(function (result) {
-                    promise.resolve(result);
-                }, function (error) {
-                    promise.reject(error);
-                }, settingName, searchTerm, cleanSettings(settingsMap));
+                self.oauthClient.getAccessToken(state.auth, function(err, tokens) {
+                    self.requestOptions(function (result) {
+                        promise.resolve(result);
+                    }, function (error) {
+                        promise.reject(error);
+                    }, settingName, searchTerm, state, tokens);
+                });
                 break;
 
             case "private":
@@ -617,29 +567,15 @@ var VectorWatchStream = function () {
      *
      **/
     function cleanSettings(settingsMap) {
-        var ret = {};
-        for (var key in settingsMap) {
-            for (var k2 in settingsMap[key].userSettings) {
-                ret[k2] = settingsMap[key].userSettings[k2].name;
-                ret.channelLabel = key;
+        var cleaned = {};
+        for (var channelLabel in settingsMap) {
+            var userSettings = settingsMap[channelLabel].userSettings;
+            for (var setting in userSettings) {
+                cleaned[setting] = userSettings[setting].name;
             }
+            cleaned.channelLabel = channelLabel;
         }
-        return ret;
-    }
-
-    /** Removes the received settings object overheard so the developer only handles the settings themselves.
-     * @param settings {Object}
-     * @param uniqueLabel {String}
-     * @returns {Object}
-     *
-     **/
-    function wrapSettingsForDB(settings, uniqueLabel) {
-        var wrappedSettings = {};
-        for (key in settings) {
-            wrappedSettings[key] = {"name": settings[key]};
-        }
-        wrappedSettings.channelLabel = uniqueLabel;
-        return wrappedSettings;
+        return cleaned;
     }
 
     /** Removes the received settings object overheard so the developer only handles the settings themselves.
@@ -675,26 +611,6 @@ var VectorWatchStream = function () {
             log('log', propertyName + " not set");
         }
         return property;
-    }
-
-    function isInLocalStorage(settingsItem) {
-        var bool = false;
-        for (var i = 0; i < localStorage.length; i++) {
-            bool = true;
-            for (key in settingsItem) {
-                if (localStorage[i][key].indexOf(settingsItem[key]) == -1) {
-
-                    bool = false;
-                }
-            }
-
-            if (bool) {
-                break;
-
-            }
-        }
-        return bool;
-
     }
 };
 module.exports = new VectorWatchStream();
