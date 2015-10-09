@@ -188,6 +188,14 @@ var VectorWatchStream = function () {
         });
     };
 
+    /**
+     * @param state {Object}
+     * @param callback {Function}
+     */
+    this.getAuthTokensForState = function(state, callback) {
+        this.oauthClient.getAccessToken(state.auth, callback);
+    };
+
     /** Delete al settings from the DB.
      * @param resolve {Function} DB update/delete success callback
      * @param reject {Function} DB update/delete fail callback
