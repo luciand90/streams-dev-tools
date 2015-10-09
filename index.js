@@ -20,16 +20,18 @@ var VectorWatchStream = function () {
      * @param resolve {Function} DB insert success callback
      * @param reject {Function} DB insert fail callback
      * @param settings {Object} User settings
+     * @param authTokens {Object}
      * @returns {null}
      * */
-    this.registerSettings = function (resolve, reject, settings) { };
+    this.registerSettings = function (resolve, reject, settings, authTokens) { };
 
     /** This function is called every time a user removes the stream from a watch face.
      Called for public streams
      * @param settings {Object} User settings
+     * @param authTokens {Object}
      * @returns {null}
      * */
-    this.unregisterSettings = function (settings) { };
+    this.unregisterSettings = function (settings, authTokens) { };
 
     /**
      * @param resolve {Function}
@@ -384,15 +386,20 @@ var VectorWatchStream = function () {
                 storeSettingsItem(settingsMap,
                     function () {
                         /*Db INSERT success: the used defined function is being called*/
-                        self.registerSettings(function (result) {
-                            promise.resolve(result);
-                        }, function (error) {
-                            promise.reject(error);
-                        }, settingsMap);
+                        self.oauthClient.getAccessToken(settingsMap.auth, function(err, tokens) {
+                            if (err) return promise.reject(err);
+
+                            self.registerSettings(function (result) {
+                                promise.resolve(result);
+                            }, function (error) {
+                                promise.reject(error);
+                            }, settingsMap, tokens);
+                        });
                     },
-                    function () {
+                    function (err) {
                         /*Db INSERT failed*/
                         log('log', "Db INSERT failed", true);
+                        promise.reject(err);
                     });
                 break;
             case 'private':
@@ -414,12 +421,17 @@ var VectorWatchStream = function () {
                 deleteSettings(settings,
                     function () {
                         /*Db DELETE success: the used defined function is being called*/
-                        self.unregisterSettings(settings);
-                        response.sendStatus(200);
+                        self.oauthClient.getAccessToken(settings.auth, function(err, tokens) {
+                            if (err) return response.sendStatus(500);
+
+                            self.unregisterSettings(settings, tokens);
+                            response.sendStatus(200);
+                        });
                     },
                     function () {
                         /*Db INSERT failed*/
                         log('log', "Db DELETE failed", true);
+                        response.sendStatus(500);
                     });
 
                 break;
