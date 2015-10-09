@@ -23,7 +23,9 @@ var VectorWatchStream = function () {
      * @param authTokens {Object}
      * @returns {null}
      * */
-    this.registerSettings = function (resolve, reject, settings, authTokens) { };
+    this.registerSettings = function (resolve, reject, settings, authTokens) {
+        reject(new Error('Not implemented.'));
+    };
 
     /** This function is called every time a user removes the stream from a watch face.
      Called for public streams
@@ -38,7 +40,9 @@ var VectorWatchStream = function () {
      * @param reject {Function}
      * @param authTokens {Object}
      */
-    this.requestConfig = function(resolve, reject, authTokens) { };
+    this.requestConfig = function(resolve, reject, authTokens) {
+        reject(new Error('Not implemented.'));
+    };
 
     /**
      * @param resolve {Function}
@@ -48,7 +52,9 @@ var VectorWatchStream = function () {
      * @param state {Object}
      * @param authTokens {Object}
      */
-    this.requestOptions = function(resolve, reject, settingName, searchTerm, state, authTokens) { };
+    this.requestOptions = function(resolve, reject, settingName, searchTerm, state, authTokens) {
+        reject(new Error('Not implemented.'));
+    };
 
 
     this.dbConnection = null;
