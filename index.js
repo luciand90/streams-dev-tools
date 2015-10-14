@@ -1,5 +1,4 @@
 var express = require('express'),
-    path = require('path'),
     bodyParser = require('body-parser'),
     server = express(),
     expressValidator = require('express-validator'),
@@ -131,19 +130,17 @@ var VectorWatchStream = function () {
      * */
     this.sendDeliverRequests = function (dataArray) {
         if (Object.prototype.toString.call(dataArray) != '[object Array]') {
-            log('log', "Method expects an array. Example:[{data:'...', settingsItem:'...'}]");
+            log('log', "Method expects an array. Example:[{channelLabel: 'value for stream'}]");
         }
-        var requestBody = [];
-        dataArray.forEach(function (element) {
-            delete element.settingsItem.__auth;
-            var wrappedSettings = wrapSettingsForPush(element.settingsItem);
-            var packagedData = getStreamDataObject(element.data, wrappedSettings, element.settingsItem.channelLabel);
-            requestBody.push({
-                streamUUID: streamUID,
-                streamData: packagedData
-            });
-
-        });
+        var requestBody = {
+            v: 1,
+            p: [
+                {
+                    streamUUID: streamUID,
+                    streamData: dataArray
+                }
+            ]
+        };
         log('log', "The data is sent to VectorCloud.", true);
         log('log', requestBody, this.debugMode);
         var options = {
@@ -253,12 +250,13 @@ var VectorWatchStream = function () {
 
             var state = cleanSettings((req.body.configStreamSettings || {}).userSettingsMap || {});
             var auth = req.body.auth;
+            state.__auth = auth;
 
             defaultSettings = state;
             if (eventType == "USR_REG") {
-                registerHandler(state, state.channelLabel, auth, res);
+                registerHandler(state, state.channelLabel, res);
             } else if (eventType == "USR_UNREG") {
-                unregisterHandler(state, auth, res);
+                unregisterHandler(state, res);
             } else if (eventType == "REQ_AUTH") {
                 authHandler(res);
             } else if (eventType == "REQ_CONFIG") {
@@ -268,7 +266,7 @@ var VectorWatchStream = function () {
 
                 var settingName = req.body.settingName;
                 var searchTerm = req.body.searchTerm || '';
-                optionsHandler(settingName, searchTerm, state, auth, res);
+                optionsHandler(settingName, searchTerm, state, res);
             } else {
                 return next("No known event");
             }
@@ -300,8 +298,7 @@ var VectorWatchStream = function () {
      * @returns null
      *
      **/
-    function storeSettingsItem(settings, auth, resolve, reject) {
-        settings.__auth = auth;
+    function storeSettingsItem(settings, resolve, reject) {
         self.stateStorage.store(settings.channelLabel, settings, function(err) {
             if (err) {
                 log('warn', err, self.debugMode);
@@ -348,49 +345,27 @@ var VectorWatchStream = function () {
         });
     }
 
-    /** Set the function that returns the stream value for a given setting/settings
-     * @param pushDataContent {String/int}
-     * @param settingsMap {Object}
-     * @param channelLabel {String}
-     * @returns {Object}
-     *
-     **/
-    function getStreamDataObject(pushDataContent, settingsMap, channelLabel) {
-        if (hasSettings) {
-            if (!channelLabel) {
-                channelLabel = settingsMap.channelLabel;
-            }
-        } else {
-            settingsMap = defaultSettings;
-            if (channelLabel == null) {
-                channelLabel = getKey(settingsMap);
-            }
-        }
-        var deliverRequest = {v: 1, p: []};
-        if (pushDataContent != null) {
-            pushDataContent = {
-                type: 3,
-                streamUUID: streamUID,
-                channelLabel: channelLabel,
-                d: pushDataContent
-            };
-            deliverRequest.p.push(pushDataContent);
-        }
-        return deliverRequest;
-    }
-
     /** Calls the developer defined registration function(registerSettings/registerUser). The developer calls the resolve or reject parameter function depending on the outcome.
      * @param settingsMap {Object}
      * @param channelLabel {String}
      * @param response {Object}
      * @returns {null}
      **/
-    function registerHandler(settingsMap, channelLabel, auth, response) {
+    function registerHandler(settingsMap, channelLabel, response) {
         var promise = new Promise();
-        promise.then(function (streamData) {
-            log('log', "Registration successfull, the response containing " + streamData.data + " is being sent", true);
-            streamData = getStreamDataObject(streamData.data, settingsMap, channelLabel);
-            response.status(200).json(streamData);
+        promise.then(function (streamValue) {
+            log('log', "Registration successfull, the response containing " + streamValue + " is being sent", true);
+            var streamData = { };
+            streamData[channelLabel] = streamValue;
+            response.status(200).json({
+                v: 1,
+                p: [
+                    {
+                        streamUUID: streamUID,
+                        streamData: streamData
+                    }
+                ]
+            });
         }, function (reason, statusCode) {
             statusCode = statusCode ? statusCode : 400;
             log('log', "Registration unsuccessfull, the response containing the error message is being sent", true);
@@ -398,10 +373,10 @@ var VectorWatchStream = function () {
         });
         switch (streamType) {
             case "public":
-                storeSettingsItem(settingsMap, auth,
+                storeSettingsItem(settingsMap,
                     function () {
                         /*Db INSERT success: the used defined function is being called*/
-                        self.oauthClient.getAccessToken(auth, function(err, tokens) {
+                        self.oauthClient.getAccessToken(settingsMap.__auth, function(err, tokens) {
                             if (err) return promise.reject(err);
 
                             self.registerSettings(function (result) {
@@ -436,7 +411,7 @@ var VectorWatchStream = function () {
                 deleteSettings(settings,
                     function () {
                         /*Db DELETE success: the used defined function is being called*/
-                        self.oauthClient.getAccessToken(settings.auth, function(err, tokens) {
+                        self.oauthClient.getAccessToken(settings.__auth, function(err, tokens) {
                             if (err) return response.sendStatus(500);
 
                             self.unregisterSettings(settings, tokens);
@@ -571,7 +546,7 @@ var VectorWatchStream = function () {
 
         switch (streamType) {
             case "public":
-                self.oauthClient.getAccessToken(state.auth, function(err, tokens) {
+                self.oauthClient.getAccessToken(state.__auth, function(err, tokens) {
                     self.requestOptions(function (result) {
                         promise.resolve(result);
                     }, function (err) {
@@ -603,26 +578,6 @@ var VectorWatchStream = function () {
             cleaned.channelLabel = channelLabel;
         }
         return cleaned;
-    }
-
-    /** Removes the received settings object overheard so the developer only handles the settings themselves.
-     * @param settings {Object}
-     * @returns {Object}
-     *
-     **/
-    function wrapSettingsForPush(settings) {
-        var wrappedSettings = {};
-        wrappedSettings[settings.channelLabel] = {uniqueLabel: settings.channelLabel, userSettings: {}};
-        for (key in settings) {
-            wrappedSettings[settings.channelLabel].userSettings[key] = {"name": settings[key]};
-        }
-        return wrappedSettings;
-    }
-
-    function getKey(settingsMap) {
-        for (key in settingsMap) {
-            return key;
-        }
     }
 
     function log(type, text, force) {
