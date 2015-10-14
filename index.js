@@ -135,12 +135,12 @@ var VectorWatchStream = function () {
         }
         var requestBody = [];
         dataArray.forEach(function (element) {
+            delete element.settingsItem.__auth;
             var wrappedSettings = wrapSettingsForPush(element.settingsItem);
             var packagedData = getStreamDataObject(element.data, wrappedSettings, element.settingsItem.channelLabel);
             requestBody.push({
                 streamUUID: streamUID,
-                streamData: packagedData,
-                settings: wrappedSettings
+                streamData: packagedData
             });
 
         });
@@ -199,7 +199,7 @@ var VectorWatchStream = function () {
      * @param callback {Function}
      */
     this.getAuthTokensForState = function(state, callback) {
-        this.oauthClient.getAccessToken(state.auth, callback);
+        this.oauthClient.getAccessToken(state.__auth, callback);
     };
 
     /** Delete al settings from the DB.
@@ -256,9 +256,9 @@ var VectorWatchStream = function () {
 
             defaultSettings = state;
             if (eventType == "USR_REG") {
-                registerHandler(state, state.channelLabel, res);
+                registerHandler(state, state.channelLabel, auth, res);
             } else if (eventType == "USR_UNREG") {
-                unregisterHandler(state, res);
+                unregisterHandler(state, auth, res);
             } else if (eventType == "REQ_AUTH") {
                 authHandler(res);
             } else if (eventType == "REQ_CONFIG") {
@@ -268,7 +268,7 @@ var VectorWatchStream = function () {
 
                 var settingName = req.body.settingName;
                 var searchTerm = req.body.searchTerm || '';
-                optionsHandler(settingName, searchTerm, state, res);
+                optionsHandler(settingName, searchTerm, state, auth, res);
             } else {
                 return next("No known event");
             }
@@ -300,7 +300,8 @@ var VectorWatchStream = function () {
      * @returns null
      *
      **/
-    function storeSettingsItem(settings, resolve, reject) {
+    function storeSettingsItem(settings, auth, resolve, reject) {
+        settings.__auth = auth;
         self.stateStorage.store(settings.channelLabel, settings, function(err) {
             if (err) {
                 log('warn', err, self.debugMode);
@@ -384,7 +385,7 @@ var VectorWatchStream = function () {
      * @param response {Object}
      * @returns {null}
      **/
-    function registerHandler(settingsMap, channelLabel, response) {
+    function registerHandler(settingsMap, channelLabel, auth, response) {
         var promise = new Promise();
         promise.then(function (streamData) {
             log('log', "Registration successfull, the response containing " + streamData.data + " is being sent", true);
@@ -397,10 +398,10 @@ var VectorWatchStream = function () {
         });
         switch (streamType) {
             case "public":
-                storeSettingsItem(settingsMap,
+                storeSettingsItem(settingsMap, auth,
                     function () {
                         /*Db INSERT success: the used defined function is being called*/
-                        self.oauthClient.getAccessToken(settingsMap.auth, function(err, tokens) {
+                        self.oauthClient.getAccessToken(auth, function(err, tokens) {
                             if (err) return promise.reject(err);
 
                             self.registerSettings(function (result) {
