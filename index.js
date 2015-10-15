@@ -249,7 +249,7 @@ var VectorWatchStream = function () {
             var eventType = req.body.eventType;
 
             var state = cleanSettings((req.body.configStreamSettings || {}).userSettingsMap || {});
-            var auth = req.body.auth;
+            var auth = state.__auth || req.body.auth;
             state.__auth = auth;
 
             defaultSettings = state;
@@ -576,6 +576,7 @@ var VectorWatchStream = function () {
                 cleaned[setting] = userSettings[setting].name;
             }
             cleaned.channelLabel = channelLabel;
+            cleaned.__auth = settingsMap[channelLabel].auth;
         }
         return cleaned;
     }
