@@ -60,7 +60,7 @@ var VectorWatchStream = function () {
     this.debugMode = false;
 
     /******Private******/
-    var portNumber = 3500, token, streamUID, streamType, hasSettings = true, devMode = false, defaultSettings = "", pushURL = "http://localhost:8080/VectorCloud/rest/v1/app/push", self = this;//52.16.43.57
+    var portNumber = 3500, token, streamUID, streamType, hasSettings = true, devMode = false, defaultSettings = "", pushURL = "http://52.16.43.57:8080/VectorCloud/rest/v1/stream/push", self = this;//52.16.43.57
     /*****Methods*****/
 
     /** Receives configuration JSON provided by VectorWatch.
@@ -132,14 +132,22 @@ var VectorWatchStream = function () {
         if (Object.prototype.toString.call(dataArray) != '[object Array]') {
             log('log', "Method expects an array. Example:[{channelLabel: 'value for stream'}]");
         }
+
+        var packets = [];
+        dataArray.forEach(function(data) {
+            for (var channelLabel in data) {
+                packets.push({
+                    type: 3,
+                    streamUUID: streamUID,
+                    channelLabel: channelLabel,
+                    d: data[channelLabel]
+                });
+            }
+        });
+
         var requestBody = {
             v: 1,
-            p: [
-                {
-                    streamUUID: streamUID,
-                    streamData: dataArray
-                }
-            ]
+            p: packets
         };
         log('log', "The data is sent to VectorCloud.", true);
         log('log', requestBody, this.debugMode);
@@ -355,14 +363,15 @@ var VectorWatchStream = function () {
         var promise = new Promise();
         promise.then(function (streamValue) {
             log('log', "Registration successfull, the response containing " + streamValue + " is being sent", true);
-            var streamData = { };
-            streamData[channelLabel] = streamValue;
+
             response.status(200).json({
                 v: 1,
                 p: [
                     {
+                        type: 3,
                         streamUUID: streamUID,
-                        streamData: streamData
+                        channelLabel: channelLabel,
+                        d: streamValue
                     }
                 ]
             });
