@@ -371,7 +371,7 @@ var VectorWatchStream = function () {
                         type: 3,
                         streamUUID: streamUID,
                         channelLabel: channelLabel,
-                        d: streamValue
+                        d: streamValue[channelLabel] || streamValue
                     }
                 ]
             });
