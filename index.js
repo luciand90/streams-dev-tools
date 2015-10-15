@@ -573,7 +573,11 @@ var VectorWatchStream = function () {
         for (var channelLabel in settingsMap) {
             var userSettings = settingsMap[channelLabel].userSettings;
             for (var setting in userSettings) {
-                cleaned[setting] = userSettings[setting].name;
+                var settingObject = userSettings[setting];
+                var value = settingObject.value;
+                var name = settingObject.name;
+
+                cleaned[setting] = value || name || settingObject;
             }
             cleaned.channelLabel = channelLabel;
             cleaned.__auth = settingsMap[channelLabel].auth;
