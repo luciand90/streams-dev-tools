@@ -164,7 +164,7 @@ VectorWatchStreamNode.prototype.sendDeliverRequests = function (dataArray) {
  * @returns null
  *
  **/
-VectorWatchStreamNode.prototype.retrieveSettings = VectorWatchStreamNode.prototypesi.retrieveState = function (resolve, reject) {
+VectorWatchStreamNode.prototype.retrieveSettings = VectorWatchStreamNode.prototype.retrieveState = function (resolve, reject) {
     var _this = this;
     this.stateStorage.retrieveAll(function(err, states) {
         if (err) {
