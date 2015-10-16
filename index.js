@@ -244,7 +244,7 @@ privateMethods = {
             } else if (eventType == "USR_UNREG") {
                 privateMethods.unregisterHandler.call(this, state, res);
             } else if (eventType == "REQ_AUTH") {
-                privateMethods.authHandler(res);
+                privateMethods.authHandler.call(this, res);
             } else if (eventType == "REQ_CONFIG") {
                 privateMethods.configHandler.call(this, state.__auth, res);
             } else if (eventType == "REQ_OPTS") {
