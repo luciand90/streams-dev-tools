@@ -26,6 +26,7 @@ var VectorWatchStreamNode = function VectorWatchStreamNode(options) {
     if (typeof options != "object" && Object.prototype.toString.call(options) == '[object Array]') {
         throw new Error('options have to be an object.');
     }
+    this.options = options;
     this.debugMode = false;
 
     if (!options.token) {
