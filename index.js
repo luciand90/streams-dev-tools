@@ -6,6 +6,7 @@ var express = require('express'),
     util = require('util'),
     OAuthProvider = require('./lib/OAuthProvider.js'),
     Promise = require("node-promise").Promise,
+    SendBuffer = require('./lib/SendBuffer.js'),
     pushURL = 'http://52.16.43.57:8080/VectorCloud/rest/v1/stream/push',
     privateMethods;
 
@@ -28,6 +29,7 @@ var VectorWatchStreamNode = function VectorWatchStreamNode(options) {
     }
     this.options = options;
     this.debugMode = false;
+    var _this = this;
 
     if (!options.token) {
         throw new Error('token is required.');
@@ -64,6 +66,29 @@ var VectorWatchStreamNode = function VectorWatchStreamNode(options) {
         }
         this.oauthClient = OAuthProvider.create(this.authStorage, auth);
     }
+
+    this.sendBuffer = new SendBuffer();
+    this.sendBuffer.on('flush', function(packets) {
+        var requestBody = {
+            v: 1,
+            p: packets
+        };
+        log('log', "The data is sent to VectorCloud.", true);
+        log('log', requestBody, _this.debugMode);
+        var options = {
+            uri: pushURL,
+            method: 'POST',
+            json: requestBody,
+            headers: {"Authorization": _this.token}
+        };
+        request(options, function (err, response, body) {
+            if (!err && response.statusCode == 200) {
+                log('log', body, _this.debugMode);
+            } else {
+                log('log', err, _this.debugMode);
+            }
+        });
+    });
 
     privateMethods.setupRouter.call(this);
 };
@@ -112,48 +137,43 @@ VectorWatchStreamNode.prototype.requestOptions = function(resolve, reject, setti
     reject && reject(new Error('Not implemented.'));
 };
 
-/** Sends update request to Vector Cloud, with all the information needed.
- * @param dataArray {Array} The array elements contain the info that will be displayed on the watch and the coresponding settings - [data, settings]
- * @returns {null}
- * */
-VectorWatchStreamNode.prototype.sendDeliverRequests = function (dataArray) {
-    if (Object.prototype.toString.call(dataArray) != '[object Array]') {
-        log('log', "Method expects an array. Example:[{channelLabel: 'value for stream'}]");
-    }
-
-    var packets = [], _this = this;
-    dataArray.forEach(function(data) {
-        for (var channelLabel in data) {
-            packets.push({
-                type: 3,
-                streamUUID: _this.streamUID,
-                channelLabel: channelLabel,
-                d: data[channelLabel]
-            });
-        }
-    });
-
-    var requestBody = {
-        v: 1,
-        p: packets
-    };
-    log('log', "The data is sent to VectorCloud.", true);
-    log('log', requestBody, this.debugMode);
-    var options = {
-        uri: pushURL,
-        method: 'POST',
-        json: requestBody,
-        headers: {"Authorization": this.token}
-    };
-    request(options, function (err, response, body) {
-        if (!err && response.statusCode == 200) {
-            log('log', body, _this.debugMode);
-        } else {
-            log('log', err, _this.debugMode);
-        }
-    });
+/**
+ * @param state {Object}
+ * @param data {String}
+ * @param delayInMinutes {Number}
+ * @returns {VectorWatchStreamNode}
+ */
+VectorWatchStreamNode.prototype.push = function(state, data, delayInMinutes) {
+    delayInMinutes = delayInMinutes || 5;
+    this.sendBuffer.add({
+        type: 3,
+        streamUUID: this.streamUID,
+        channelLabel: state.channelLabel,
+        d: data
+    }, delayInMinutes * 60 * 1000);
+    return this;
 };
 
+/**
+ * @returns {VectorWatchStreamNode}
+ */
+VectorWatchStreamNode.prototype.pushNow = function() {
+    this.sendBuffer.flush();
+    return this;
+};
+
+/**
+ * @param state {Object}
+ * @returns {VectorWatchStreamNode}
+ */
+VectorWatchStreamNode.prototype.authTokensForStateExpired = function(state) {
+    this.sendBuffer.add({
+        type: 5,
+        streamUUID: this.streamUID,
+        channelLabel: state.channelLabel
+    }, 0);
+    return this;
+};
 
 /** Get all the settings stored in the DB. On success the resolve(settingsArray) method is called, otherwise the reject(error) method.
  * The developer can access the returned array in the resolve(settingsArray) callback, as a parameter.
@@ -271,7 +291,7 @@ privateMethods = {
                         type: 3,
                         streamUUID: _this.streamUID,
                         channelLabel: channelLabel,
-                        d: streamValue[channelLabel] || streamValue
+                        d: streamValue
                     }
                 ]
             });
