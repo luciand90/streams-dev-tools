@@ -238,21 +238,21 @@ privateMethods = {
             log('log', "Request passed validation", _this.debugMode);
             var eventType = req.body.eventType;
 
-            var state = privateMethods.getStateFromRequest.call(this, req);
+            var state = privateMethods.getStateFromRequest.call(_this, req);
             if (eventType == "USR_REG") {
-                privateMethods.registerHandler.call(this, state, state.channelLabel, res);
+                privateMethods.registerHandler.call(_this, state, state.channelLabel, res);
             } else if (eventType == "USR_UNREG") {
-                privateMethods.unregisterHandler.call(this, state, res);
+                privateMethods.unregisterHandler.call(_this, state, res);
             } else if (eventType == "REQ_AUTH") {
-                privateMethods.authHandler.call(this, res);
+                privateMethods.authHandler.call(_this, res);
             } else if (eventType == "REQ_CONFIG") {
-                privateMethods.configHandler.call(this, state.__auth, res);
+                privateMethods.configHandler.call(_this, state.__auth, res);
             } else if (eventType == "REQ_OPTS") {
                 req.assert('settingName', 'Setting name is required').notEmpty();
 
                 var settingName = req.body.settingName;
                 var searchTerm = req.body.value || '';
-                privateMethods.optionsHandler.call(this, settingName, searchTerm, state, res);
+                privateMethods.optionsHandler.call(_this, settingName, searchTerm, state, res);
             } else {
                 return next("No known event");
             }
