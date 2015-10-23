@@ -198,7 +198,7 @@ VectorWatchStreamNode.prototype.retrieveSettings = VectorWatchStreamNode.prototy
             state.channelLabel = channelLabel;
         }
 
-        resolve && resolve(states);
+        resolve && resolve(states || {});
     });
 };
 
@@ -231,6 +231,16 @@ VectorWatchStreamNode.prototype.dbCleanUp = function (resolve, reject) {
 
 VectorWatchStreamNode.prototype.getMiddleware = function() {
     return this.app;
+};
+
+VectorWatchStreamNode.prototype.startStreamServer = function(port, callback) {
+    this.app.listen(port, callback);
+};
+
+VectorWatchStreamNode.prototype.changeAuthTokensForState = function(state, authTokens) {
+    this.oauthClient.storeAccessToken(state, authTokens, function() {
+
+    });
 };
 
 
