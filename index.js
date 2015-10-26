@@ -70,7 +70,7 @@ var VectorWatchStreamNode = function VectorWatchStreamNode(options) {
     this.sendBuffer = new SendBuffer();
     this.sendBuffer.on('flush', function(packets) {
         log('log', "The data is sent to VectorCloud.", true);
-        log('log', requestBody, _this.debugMode);
+        log('log', packets, _this.debugMode);
         var options = {
             uri: pushURL,
             method: 'POST',
