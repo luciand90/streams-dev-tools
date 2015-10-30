@@ -203,7 +203,7 @@ VectorWatchStreamNode.prototype.retrieveSettings = VectorWatchStreamNode.prototy
  * @param callback {Function}
  */
 VectorWatchStreamNode.prototype.getAuthTokensForState = function(state, callback) {
-    this.oauthClient.getAccessToken(state.__auth, callback);
+    privateMethods.getAccessToken.call(this, state.__auth, callback);
 };
 
 /** Delete al settings from the DB.
@@ -309,7 +309,7 @@ privateMethods = {
         privateMethods.storeSettingsItem.call(
             this, state,
             function() {
-                _this.oauthClient.getAccessToken(state.__auth, function(err, tokens) {
+                privateMethods.getAccessToken.call(_this, state.__auth, function(err, tokens) {
                     if (err) return promise.reject(err);
 
                     _this.registerSettings(function (result) {
@@ -330,7 +330,7 @@ privateMethods = {
         privateMethods.deleteSettings.call(
             this, state,
             function() {
-                _this.oauthClient.getAccessToken(state.__auth, function(err, tokens) {
+                privateMethods.getAccessToken.call(_this, state.__auth, function(err, tokens) {
                     if (err) return response.sendStatus(500);
 
                     _this.unregisterSettings(state, tokens);
@@ -386,7 +386,7 @@ privateMethods = {
             response.status(statusCode || 400).json(reason);
         });
 
-        this.oauthClient.getAccessToken(auth, function(err, tokens) {
+        privateMethods.getAccessToken.call(this, auth, function(err, tokens) {
             if (err) return promise.reject(err);
 
             _this.requestConfig(function(result) {
@@ -411,7 +411,7 @@ privateMethods = {
             response.status(statusCode || 400).json(reason);
         });
 
-        this.oauthClient.getAccessToken(state.__auth, function(err, tokens) {
+        privateMethods.getAccessToken.call(this, state.__auth, function(err, tokens) {
             _this.requestOptions(function (result) {
                 promise.resolve(result);
             }, function (err) {
@@ -475,6 +475,14 @@ privateMethods = {
             log('log', "Setting table updated.", _this.debugMode);
             resolve && resolve();
         });
+    },
+
+    getAccessToken: function(credentials, callback) {
+        if (!this.options.auth) {
+            return callback();
+        }
+
+        this.oauthClient.getAccessToken(credentials, callback);
     }
 };
 
