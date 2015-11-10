@@ -1,6 +1,6 @@
 {
   "name": "stream-dev-tools",
-  "version": "1.1.2",
+  "version": "3.2.1",
   "description": "npm package for developing VectorWatch stream",
   "main": "index.js",
   "scripts": {
@@ -24,6 +24,7 @@
     "mysql": "*",
     "node-promise": "^0.5.12",
     "node-schedule": "*",
+    "oauth": "^0.9.14",
     "request": "*"
   }
 }
