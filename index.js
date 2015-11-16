@@ -1,544 +1,513 @@
 var express = require('express'),
-    path = require('path'),
     bodyParser = require('body-parser'),
-    server = express(),
     expressValidator = require('express-validator'),
     request = require('request'),
-    mysql = require('mysql');
-util = require('util');
-var Promise = require("node-promise").Promise;
+    mysql = require('mysql'),
+    util = require('util'),
+    OAuthProvider = require('./lib/OAuthProvider.js'),
+    Promise = require("node-promise").Promise,
+    SendBuffer = require('./lib/SendBuffer.js'),
+    pushURL = 'http://52.16.43.57:8080/VectorCloud/rest/v1/stream/push',
+    privateMethods;
 
-var StreamData = function (data, settings, userId) {
-    this.data = data;
-    this.settings = settings;
-    this.userId = userId;
-};
+function log(type, text, force) {
+    if (force) {
+        console[type](util.inspect(text, {colors: true, depth: null}));
+    }
+}
 
-var VectorWatchStream = function () {
-    /******Public******/
-    /** This function is called every time a user adds the stream to a watch face(and selects the desired settings, if needed).
-     * The DB(if the stream has settings that need to be stored) is automatically updated.
-     * When implementing this method the developer must call the 'resolve' function parameter after he retrives/generates the data.
-     *      resolve({data:"..."});
-     * Called for public streams
-     * @param resolve {Function} DB insert success callback
-     * @param reject {Function} DB insert fail callback
-     * @param settings {Object} User settings
-     * @returns {null}
-     * */
-    this.registerSettings = function (resolve, reject, settings) {
-    };
+function establishDBConnection(dbSettings) {
+    if (dbSettings.connection) return dbSettings.connection;
 
-    /** This function is called every time a user removes the stream from a watch face.
-     Called for public streams
-     * @param settings {Object} User settings
-     * @returns {null}
-     * */
-    this.unregisterSettings = function (settings) {
-    };
+    return mysql.createConnection(dbSettings);
+}
 
-    /** This function is called every time a user adds the stream to a watch face(and selects the desired settings, if needed).
-     * The DB(if the stream has settings that need to be stored) is automatically updated.
-     * When implementing this method the developer must call the 'resolve' function parameter after he retrives/generates the data.
-     *      resolve({data:"..."});
-     * Called for private streams
-     * @param resolve {Function} DB insert success callback
-     * @param reject {Function} DB insert fail callback
-     * @param userId {int} User ID
-     * @param settings {Object} user settings
-     * @returns {null}
-     * */
-    this.registerUser = function (resolve, reject, userId, settings) {
-    };
 
-    /** This function is called every time a user removes the stream from a watch face.
-     Called for private streams
-     * @param settings {Object} user settings
-     * @returns {null}
-     * */
-    this.unregisterUser = function (settings) {
-    };
-
-    this.dbConnection = null;
+var VectorWatchStreamNode = function VectorWatchStreamNode(options) {
+    if (typeof options != "object" && Object.prototype.toString.call(options) == '[object Array]') {
+        throw new Error('options have to be an object.');
+    }
+    this.options = options;
     this.debugMode = false;
+    var _this = this;
 
-    /******Private******/
-    var portNumber = 3500, token, streamUID, streamType, localStorage, hasSettings = true, devMode = false, defaultSettings = "", pushURL = "http://localhost:8080/VectorCloud/rest/v1/app/push", self = this;//52.16.43.57
-    /*****Methods*****/
+    if (!options.token) {
+        throw new Error('token is required.');
+    }
+    this.token = options.token;
 
-    /** Receives configuration JSON provided by VectorWatch.
-     * @param propJSON {Object} Called after the server starts listening.
-     * @returns {null}
-     * */
-    this.config = function (propJSON) {
-        if (typeof propJSON != "object" && Object.prototype.toString.call(dataArray) == '[object Array]') {
-            log('warn', "Method expects a JSON Object.");
-        }
-        portNumber = setProp(portNumber, "portNumber", propJSON);
-        token = setProp(token, "token", propJSON);
-        streamUID = setProp(streamUID, "streamUID", propJSON);
-        streamType = setProp(streamType, "streamType", propJSON);
-        hasSettings = setProp(hasSettings, "hasSettings", propJSON);
-        defaultSettings = setProp(defaultSettings, "defaultSettings", propJSON);
-        if (propJSON.database) {
-            this.dbConnection = establishDBConnection(propJSON.database.host, propJSON.database.user, propJSON.database.password, propJSON.database.database);
-        } else {
-            devMode = true;
-            localStorage = [];
-        }
-    };
+    if (!options.streamUID) {
+        throw new Error('streamUID is required.');
+    }
+    this.streamUID = options.streamUID;
 
-    /** Starts the express framework.
-     * @param initAction {Function} Called after the server starts listening.
-     * @returns {null}
-     * */
-    this.startServer = function (initAction) {
-        if (typeof initAction != "function") {
-            log('log', "Method expects a function.");
-        }
-        server.use(express.static(path.join(__dirname, 'public')));
-        server.use(bodyParser.urlencoded({extended: true})); //support x-www-form-urlencoded
-        server.use(bodyParser.json());
-        server.use(expressValidator());
-        server.use('/api', getServerRouter(self));
-        log('log', "Port number:" + portNumber, true);
-        server.listen(portNumber, initAction);
-    };
+    if (options.database) {
+        var connection = establishDBConnection(options.database);
 
-    /** Sends update request to Vector Cloud, with all the information needed.
-     * @param dataArray {Array} The array elements contain the info that will be displayed on the watch and the coresponding settings - [data, settings]
-     * @returns {null}
-     * */
-    this.sendDeliverRequests = function (dataArray) {
-        if (Object.prototype.toString.call(dataArray) != '[object Array]') {
-            log('log', "Method expects an array. Example:[{data:'...', settingsItem:'...'}]");
-        }
-        var requestBody = [];
-        dataArray.forEach(function (element) {
-            var packagedData = getStreamDataObject(element.data, wrapSettingsForPush(element.settingsItem), element.settingsItem.channelLabel);
-            requestBody.push({
-                streamUUID: streamUID,
-                streamData: packagedData,
-                settings: wrapSettingsForPush(element.settingsItem)
-            });
-
+        var MysqlStorageProvider = require('./lib/StorageProviders/MysqlStorageProvider.js');
+        this.authStorage = new MysqlStorageProvider({
+            connection: connection,
+            table: options.database.authStorageTable || 'Auth'
         });
-        log('log', "The data is sent to VectorCoud.", true);
-        log('log', requestBody, this.debugMode);
+        this.stateStorage = new MysqlStorageProvider({
+            connection: connection,
+            table: options.database.stateStorageTable || 'Settings'
+        });
+    } else {
+        var MemoryStorageProvider = require('./lib/StorageProviders/MemoryStorageProvider.js');
+        this.authStorage = new MemoryStorageProvider();
+        this.stateStorage = new MemoryStorageProvider();
+    }
+
+    if (options.auth) {
+        var auth = options.auth;
+        if (auth.protocol.toLowerCase() != 'oauth') {
+            throw new Error('Unsupported auth protocol.');
+        }
+        this.oauthClient = OAuthProvider.create(this.authStorage, auth);
+    }
+
+    this.sendBuffer = new SendBuffer();
+    this.sendBuffer.on('flush', function(packets) {
+        log('log', "The data is sent to VectorCloud.", true);
+        log('log', packets, _this.debugMode);
         var options = {
             uri: pushURL,
             method: 'POST',
-            json: requestBody,
-            headers: {"Authorization": token}
+            json: packets,
+            headers: {"Authorization": _this.token}
         };
-        request(options, function (error, response, body) {
-            if (!error && response.statusCode == 200) {
-                log('log', body, self.debugMode);
+        request(options, function (err, response, body) {
+            if (!err && response.statusCode == 200) {
+                log('log', body, _this.debugMode);
             } else {
-                log('log', error, self.debugMode);
+                log('log', err, _this.debugMode);
             }
         });
-    };
+    });
 
+    privateMethods.setupRouter.call(this);
+};
 
-    /** Get all the settings stored in the DB. On success the resolve(settingsArray) method is called, otherwise the reject(error) method.
-     * The developer can access the returned array in the resolve(settingsArray) callback, as a parameter.
-     Example: sample_stream.retrieveSettings(function (settingsArray) {
-                    console.log(settingsArray); -> [{"City":"Bucharest", ...},{"City":"New York", ...}, ...]
-                });
-     * @param resolve {Function} DB select success callback
-     * @param reject {Function} DB select fail callback
-     * @returns null
-     *
-     **/
-    this.retrieveSettings = function (resolve, reject) {
-        if (devMode) {
-            resolve(localStorage);
-        } else {
-            var settingsArray = [];
-            this.dbConnection.query("SELECT settings FROM Settings", function (err, rows) {
-                if (err) {
-                    log('warn', err, self.debugMode);
-                    if (reject) {
-                        reject(err);
-                    }
-                } else {
-                    var settingsArray = [], settings, temp;
-                    rows.forEach(function (element) {
-                        settings = JSON.parse(element.settings);
-                        temp = {};
-                        for (setting in settings) {
-                            if (setting != 'channelLabel') {
-                                temp[setting] = settings[setting].name;
-                            } else {
-                                temp[setting] = settings[setting];
-                            }
-                        }
-                        settingsArray.push(temp);
-                    });
-                    if (resolve) {
-                        resolve(settingsArray);
-                    } else {
-                        log('log', 'No callback', self.debugMode);
-                    }
-                }
+/** This function is called every time a user adds the stream to a watch face(and selects the desired settings, if needed).
+ * The DB(if the stream has settings that need to be stored) is automatically updated.
+ * When implementing this method the developer must call the 'resolve' function parameter after he retrives/generates the data.
+ *      resolve({data:"..."});
+ * Called for public streams
+ * @param resolve {Function} DB insert success callback
+ * @param reject {Function} DB insert fail callback
+ * @param settings {Object} User settings
+ * @param authTokens {Object}
+ * @returns {null}
+ * */
+VectorWatchStreamNode.prototype.registerSettings = function (resolve, reject, settings, authTokens) {
+    reject && reject(new Error('Not implemented.'));
+};
+
+/** This function is called every time a user removes the stream from a watch face.
+ Called for public streams
+ * @param settings {Object} User settings
+ * @param authTokens {Object}
+ * @returns {null}
+ * */
+VectorWatchStreamNode.prototype.unregisterSettings = function (settings, authTokens) { };
+
+/**
+ * @param resolve {Function}
+ * @param reject {Function}
+ * @param authTokens {Object}
+ */
+VectorWatchStreamNode.prototype.requestConfig = function(resolve, reject, authTokens) {
+    reject && reject(new Error('Not implemented.'));
+};
+
+/**
+ * @param resolve {Function}
+ * @param reject {Function}
+ * @param settingName {String}
+ * @param searchTerm {String}
+ * @param state {Object}
+ * @param authTokens {Object}
+ */
+VectorWatchStreamNode.prototype.requestOptions = function(resolve, reject, settingName, searchTerm, state, authTokens) {
+    reject && reject(new Error('Not implemented.'));
+};
+
+/**
+ * @param state {Object}
+ * @param data {String}
+ * @param delayInMinutes {Number}
+ * @returns {VectorWatchStreamNode}
+ */
+VectorWatchStreamNode.prototype.push = function(state, data, delayInMinutes) {
+    delayInMinutes = delayInMinutes || 5;
+    this.sendBuffer.add({
+        type: 3,
+        streamUUID: this.streamUID,
+        channelLabel: state.channelLabel,
+        d: data
+    }, delayInMinutes * 60 * 1000);
+    return this;
+};
+
+/**
+ * @returns {VectorWatchStreamNode}
+ */
+VectorWatchStreamNode.prototype.pushNow = function() {
+    this.sendBuffer.flush();
+    return this;
+};
+
+/**
+ * @param state {Object}
+ * @returns {VectorWatchStreamNode}
+ */
+VectorWatchStreamNode.prototype.authTokensForStateExpired = function(state) {
+    this.sendBuffer.add({
+        type: 5,
+        streamUUID: this.streamUID,
+        channelLabel: state.channelLabel
+    }, 0);
+    return this;
+};
+
+/** Get all the settings stored in the DB. On success the resolve(settingsArray) method is called, otherwise the reject(error) method.
+ * The developer can access the returned array in the resolve(settingsArray) callback, as a parameter.
+ Example: sample_stream.retrieveSettings(function (settingsArray) {
+                console.log(settingsArray); -> [{"City":"Bucharest", ...},{"City":"New York", ...}, ...]
             });
+ * @param resolve {Function} DB select success callback
+ * @param reject {Function} DB select fail callback
+ * @returns null
+ *
+ **/
+VectorWatchStreamNode.prototype.retrieveSettings = VectorWatchStreamNode.prototype.retrieveState = function (resolve, reject) {
+    var _this = this;
+    this.stateStorage.retrieveAll(function(err, states) {
+        if (err) {
+            log('warn', err, _this.debugMode);
+            return reject && reject(err);
         }
-    };
 
-    /** Delete al settings from the DB.
-     * @param resolve {Function} DB update/delete success callback
-     * @param reject {Function} DB update/delete fail callback
-     * @returns null
-     *
-     **/
-    this.dbCleanUp = function (resolve, reject) {
-        if (devMode) {
-            localStorage = [];
-        } else {
-            self.dbConnection.query("DELETE FROM Settings", function (err) {
-                if (err) {
-                    log('warn', err, self.debugMode);
-                    if (reject) {
-                        reject(err);
-                    } else {
-                        log('log', 'No callback', self.debugMode);
-                    }
-                } else {
-                    log('log', "Deleted all rows", self.debugMode);
-                    if (resolve) {
-                        resolve();
-                    } else {
-                        log('log', 'No callback', self.debugMode);
-                    }
-                }
-            });
+        for (var channelLabel in states) {
+            var state = states[channelLabel];
+            state.channelLabel = channelLabel;
         }
-    };
+
+        resolve && resolve(states || {});
+    });
+};
+
+/**
+ * @param state {Object}
+ * @param callback {Function}
+ */
+VectorWatchStreamNode.prototype.getAuthTokensForState = function(state, callback) {
+    privateMethods.getAccessToken.call(this, state.__auth, callback);
+};
+
+/** Delete al settings from the DB.
+ * @param resolve {Function} DB update/delete success callback
+ * @param reject {Function} DB update/delete fail callback
+ * @returns null
+ *
+ **/
+VectorWatchStreamNode.prototype.dbCleanUp = function (resolve, reject) {
+    var _this = this;
+    this.stateStorage.removeAll(function(err) {
+        if (err) {
+            log('warn', err, _this.debugMode);
+            return reject && reject(err);
+        }
+
+        log('log', "Deleted all rows", _this.debugMode);
+        resolve && resolve();
+    });
+};
+
+VectorWatchStreamNode.prototype.getMiddleware = function() {
+    return this.app;
+};
+
+VectorWatchStreamNode.prototype.startStreamServer = function(port, callback) {
+    this.app.listen(port, callback);
+};
+
+VectorWatchStreamNode.prototype.changeAuthTokensForState = function(state, authTokens) {
+    this.oauthClient.storeAccessToken(state, authTokens, function() {
+
+    });
+};
 
 
-    /***********PRIVATE METHODS************/
-    /** Configures and returns a middlewire router instance.
-     * @returns {Object}
-     * */
-    var getServerRouter = function (self) {
-        var router = express.Router();
-        router.use(function (req, res, next) {
-            log('log', req.method + '' + req.url, self.debugMode);
+privateMethods = {
+    setupRouter: function () {
+        var _this = this;
+        this.app = express();
+        this.app.use(bodyParser.urlencoded({ extended: true })); //support x-www-form-urlencoded
+        this.app.use(bodyParser.json());
+        this.app.use(expressValidator());
+        this.app.use(function (req, res, next) {
+            log('log', req.method + '' + req.url, _this.debugMode);
             next();
         });
-        router.route('/callback').post(function (req, res, next) {
+
+        this.app.post('/callback', function (req, res, next) {
             req.assert('eventType', 'Event type is required').notEmpty();
-            log('log', req.body, self.debugMode);
+            log('log', req.body, _this.debugMode);
             var errors = req.validationErrors();
             if (errors) {
-                log('warn', "Vaidation errors encountered", self.debugMode);
+                log('warn', "Vaidation errors encountered", _this.debugMode);
                 res.status(400).json(errors);
                 return;
             }
-            log('log', "Request passed validation", self.debugMode);
+            log('log', "Request passed validation", _this.debugMode);
             var eventType = req.body.eventType;
-            var user_id = req.body.userKey;
-            var settingsMap = req.body.configStreamSettings ? req.body.configStreamSettings.userSettingsMap : {};
-            var channelLabel = getKey(settingsMap);
 
-            defaultSettings = settingsMap;
+            var state = privateMethods.getStateFromRequest.call(_this, req);
             if (eventType == "USR_REG") {
-                registerHandler(settingsMap, channelLabel, user_id, res);
+                privateMethods.registerHandler.call(_this, state, state.channelLabel, res);
             } else if (eventType == "USR_UNREG") {
-                unregisterHandler(settingsMap, user_id, res);
+                privateMethods.unregisterHandler.call(_this, state, res);
+            } else if (eventType == "REQ_AUTH") {
+                privateMethods.authHandler.call(_this, res);
+            } else if (eventType == "REQ_CONFIG") {
+                privateMethods.configHandler.call(_this, state.__auth, res);
+            } else if (eventType == "REQ_OPTS") {
+                req.assert('settingName', 'Setting name is required').notEmpty();
+
+                var settingName = req.body.settingName;
+                var searchTerm = req.body.value || '';
+                privateMethods.optionsHandler.call(_this, settingName, searchTerm, state, res);
             } else {
                 return next("No known event");
             }
         });
-        return router;
-    };
+    },
 
-    /** Initialise a mysql db connection
-     * @param host {String}
-     * @param user {String}
-     * @param password {String}
-     * @param database {String}
-     * @returns {null}
-     * */
-    var establishDBConnection = function (host, user, password, database) {
-        self.dbConnection = mysql.createConnection({
-            host: host,
-            user: user,
-            password: password,
-            database: database
-        });
-        return self.dbConnection;
-    };
+    registerHandler: function registerHandler(state, channelLabel, response) {
+        var promise = new Promise(), _this = this;
+        promise.then(function (streamValue) {
+            log('log', "Registration successfull, the response containing " + streamValue + " is being sent", true);
 
-    /** Store settings in the DB. On success the resolve() method is called, otherwise the reject(error) method.
-     * @param settings {Object} User settings
-     * @param resolve {Function} DB insert success callback
-     * @param reject {Function}DB insert fail callback
-     * @returns null
-     *
-     **/
-    function storeSettingsItem(settings, resolve, reject) {
-        var settingsText = JSON.stringify(wrapSettingsForDB(settings, settings.channelLabel));
-        if (devMode) {
-            if (!isInLocalStorage(settings)) {
-                localStorage.push(settings);
-            }
-            console.log("localStorage");
-            console.log(localStorage);
-            if (resolve) {
-                resolve();
-            } else {
-                log('log', 'No callback', self.debugMode);
-            }
-        } else {
-            self.dbConnection.query("INSERT INTO Settings (channelLabel, settings) VALUES (?, ?) ON DUPLICATE KEY UPDATE count = count+1", [settings.channelLabel, settingsText], function (err) {
-                if (err) {
-                    log('warn', err, self.debugMode);
-                    if (reject) {
-                        reject(err);
-                    } else {
-                        log('log', 'No callback', self.debugMode);
+            response.status(200).json({
+                v: 1,
+                p: [
+                    {
+                        type: 3,
+                        streamUUID: _this.streamUID,
+                        channelLabel: channelLabel,
+                        d: streamValue
                     }
-                } else {
-                    log('log', "Setting table updated.", self.debugMode);
-                    if (resolve) {
-                        resolve();
-                    } else {
-                        log('log', 'No callback', self.debugMode);
-                    }
-                }
+                ]
             });
-        }
-    }
-
-    /** Delete the given setting from the db
-     * @param settings {Object} User settings
-     * @param resolve {Function} DB update/delete success callback
-     * @param reject {Function} DB update/delete fail callback
-     * @returns null
-     *
-     **/
-    function deleteSettings(settings, resolve, reject) {
-        if (devMode) {
-            if (isInLocalStorage(settings)) {
-                localStorage.pop(settings);
-            }
-        } else {
-            self.dbConnection.query("UPDATE Settings SET count=count-1 WHERE channelLabel=?", [settings.channelLabel], function (err) {
-                if (err) {
-                    log('warn', err, self.debugMode);
-                    if (reject) {
-                        reject(err);
-                    }
-                } else {
-                    self.dbConnection.query("DELETE FROM Settings WHERE count <= 0", function (err) {
-                        if (err) {
-                            log('warn', err, self.debugMode);
-                            if (reject) {
-                                reject(err);
-                            } else {
-                                log('log', 'No callback', self.debugMode);
-                            }
-                        } else {
-                            log('log', "Setting table updated.", self.debugMode);
-                            if (resolve) {
-                                resolve();
-                            } else {
-                                log('log', 'No callback', self.debugMode);
-                            }
-                        }
-                    });
-                }
-            });
-        }
-    }
-
-    /** Set the function that returns the stream value for a given setting/settings
-     * @param pushDataContent {String/int}
-     * @param settingsMap {Object}
-     * @param channelLabel {String}
-     * @returns {Object}
-     *
-     **/
-    function getStreamDataObject(pushDataContent, settingsMap, channelLabel) {
-        if (hasSettings) {
-            if (!channelLabel) {
-                channelLabel = settingsMap.channelLabel;
-            }
-        } else {
-            settingsMap = defaultSettings;
-            if (channelLabel == null) {
-                channelLabel = getKey(settingsMap);
-            }
-        }
-        var deliverRequest = {v: 1, p: []};
-        if (pushDataContent != null) {
-            pushDataContent = {
-                type: 3,
-                streamUUID: streamUID,
-                channelLabel: channelLabel,
-                d: pushDataContent
-            };
-            deliverRequest.p.push(pushDataContent);
-        }
-        return deliverRequest;
-    }
-
-    /** Calls the developer defined registration function(registerSettings/registerUser). The developer calls the resolve or reject parameter function depending on the outcome.
-     * @param settingsMap {Object}
-     * @param channelLabel {String}
-     * @param userId {int}
-     * @param response {Object}
-     * @returns {null}
-     **/
-    function registerHandler(settingsMap, channelLabel, userId, response) {
-        var promise = new Promise();
-        promise.then(function (streamData) {
-            log('log', "Registration successfull, the response containing " + streamData.data + " is being sent", true);
-            streamData = getStreamDataObject(streamData.data, settingsMap, channelLabel);
-            response.status(200).json(streamData);
         }, function (reason, statusCode) {
-            statusCode = statusCode ? statusCode : 400;
             log('log', "Registration unsuccessfull, the response containing the error message is being sent", true);
-            response.status(statusCode).json(reason);
+            response.status(statusCode || 400).json(reason);
         });
-        switch (streamType) {
-            case "public":
-                storeSettingsItem(cleanSettings(settingsMap),
-                    function () {
-                        /*Db INSERT success: the used defined function is being called*/
-                        self.registerSettings(function (result) {
-                            promise.resolve(result);
-                        }, function (error) {
-                            promise.reject(error);
-                        }, cleanSettings(settingsMap));
-                    },
-                    function () {
-                        /*Db INSERT failed*/
-                        log('log', "Db INSERT failed", true);
-                    });
-                break;
-            case 'private':
-                //TODO
-                break;
-            default:
+
+        privateMethods.storeSettingsItem.call(
+            this, state,
+            function() {
+                privateMethods.getAccessToken.call(_this, state.__auth, function(err, tokens) {
+                    if (err) return promise.reject(err);
+
+                    _this.registerSettings(function (result) {
+                        promise.resolve(result);
+                    }, function (err) {
+                        promise.reject(err);
+                    }, state, tokens);
+                });
+            },
+            function (err) {
+                promise.reject(err);
+            }
+        );
+    },
+
+    unregisterHandler: function unregisterHandler(state, response) {
+        var _this = this;
+        privateMethods.deleteSettings.call(
+            this, state,
+            function() {
+                privateMethods.getAccessToken.call(_this, state.__auth, function(err, tokens) {
+                    if (err) return response.sendStatus(500);
+
+                    _this.unregisterSettings(state, tokens);
+                    response.sendStatus(200);
+                });
+            },
+            function () {
+                response.sendStatus(500);
+            }
+        );
+    },
+
+    authHandler: function authHandler(response) {
+        if (!this.options.auth) {
+            return response.sendStatus(400);
         }
-    }
 
-    /** Calls the developer defined unregistration function(unregisterSettings/unregisterUser). The developer calls the resolve or reject parameter function depending on the outcome.
-     * @param settings {Object}
-     * @param userId {int}
-     * @param response {Object}
-     * @returns {null}
-     *
-     **/
-    function unregisterHandler(settings, userId, response) {
-        switch (streamType) {
-            case "public":
-                deleteSettings(cleanSettings(settings),
-                    function () {
-                        /*Db DELETE success: the used defined function is being called*/
-                        self.unregisterSettings(cleanSettings(settings));
-                        response.sendStatus(200);
-                    },
-                    function () {
-                        /*Db INSERT failed*/
-                        log('log', "Db DELETE failed", true);
-                    });
+        var promise = new Promise(), _this = this;
+        promise.then(function(authMethod) {
+            log('log', "Request auth method successfull, the response containing " + authMethod + " is being sent", true);
 
-                break;
-            case 'private':
-                //TODO
-                break;
-            default:
-        }
-    }
+            response.status(200).json({
+                v: 1,
+                p: authMethod
+            });
+        }, function(reason, statusCode) {
+            log('log', "Request auth method unsuccessfull, the response containing the error message is being sent.", true);
+            response.status(statusCode || 400).json(reason);
+        });
 
-    /** Removes the received settings object overheard so the developer only handles the settings themselves.
-     * @param settingsMap {Object}
-     * @returns {Object}
-     *
-     **/
-    function cleanSettings(settingsMap) {
-        var ret = {};
-        for (var key in settingsMap) {
-            for (var k2 in settingsMap[key].userSettings) {
-                ret[k2] = settingsMap[key].userSettings[k2].name;
-                ret.channelLabel = key;
+        this.oauthClient.getAuthorizationUrl(function(err, url) {
+            if (err) return promise.reject(err);
+
+            promise.resolve({
+                protocol: _this.oauthClient.getProtocolName(),
+                version: _this.oauthClient.getVersion(),
+                loginUrl: url
+            });
+        });
+    },
+
+    configHandler: function configHandler(auth, response) {
+        var promise = new Promise(), _this = this;
+        promise.then(function(config) {
+            log('log', "Request stream config successful, the response containing " + config + " is being sent", true);
+
+            response.status(200).json({
+                v: 1,
+                p: config
+            });
+        }, function(reason, statusCode) {
+            log('log', "Request config unsuccessful, the response containing the error message is being sent.", true);
+            response.status(statusCode || 400).json(reason);
+        });
+
+        privateMethods.getAccessToken.call(this, auth, function(err, tokens) {
+            if (err) return promise.reject(err);
+
+            _this.requestConfig(function(result) {
+                promise.resolve(result);
+            }, function(err) {
+                promise.reject(err);
+            }, tokens);
+        });
+    },
+
+    optionsHandler: function optionsHandler(settingName, searchTerm, state, response) {
+        var promise = new Promise(), _this = this;
+        promise.then(function(options) {
+            log('log', "Request options successful, the response containing " + options + " is being sent", true);
+
+            response.status(200).json({
+                v: 1,
+                p: options
+            });
+        }, function (reason, statusCode) {
+            log('log', "Request options unsuccessful, the response containing the error message is being sent.", true);
+            response.status(statusCode || 400).json(reason);
+        });
+
+        privateMethods.getAccessToken.call(this, state.__auth, function(err, tokens) {
+            _this.requestOptions(function (result) {
+                promise.resolve(result);
+            }, function (err) {
+                promise.reject(err);
+            }, settingName, searchTerm, state, tokens);
+        });
+    },
+
+    getStateFromRequest: function getStateFromRequest(req) {
+        var cleanUserSettings = function(userSettings) {
+            var cleaned = { };
+            for (var setting in userSettings) {
+                var settingObject = userSettings[setting];
+                var value = settingObject.value;
+                var name = settingObject.name;
+
+                cleaned[setting] = value || name || settingObject;
+            }
+            return cleaned;
+        };
+
+        var state = {};
+        if (req.body.userSettings) {
+            state = cleanUserSettings(req.body.userSettings);
+        } else if (req.body.configStreamSettings) {
+            var userSettingsMap = req.body.configStreamSettings.userSettingsMap || {};
+            for (var channelLabel in userSettingsMap) {
+                state = cleanUserSettings(userSettingsMap[channelLabel].userSettings || {});
+                state.channelLabel = channelLabel;
+                state.__auth = userSettingsMap[channelLabel].auth;
             }
         }
-        return ret;
-    }
-
-    /** Removes the received settings object overheard so the developer only handles the settings themselves.
-     * @param settings {Object}
-     * @param uniqueLabel {String}
-     * @returns {Object}
-     *
-     **/
-    function wrapSettingsForDB(settings, uniqueLabel) {
-        var wrappedSettings = {};
-        for (key in settings) {
-            wrappedSettings[key] = {"name": settings[key]};
+        if (req.body.auth) {
+            state.__auth = req.body.auth;
         }
-        wrappedSettings.channelLabel = uniqueLabel;
-        return wrappedSettings;
-    }
 
-    /** Removes the received settings object overheard so the developer only handles the settings themselves.
-     * @param settings {Object}
-     * @returns {Object}
-     *
-     **/
-    function wrapSettingsForPush(settings) {
-        var wrappedSettings = {};
-        wrappedSettings[settings.channelLabel] = {uniqueLabel: settings.channelLabel, userSettings: {}};
-        for (key in settings) {
-            wrappedSettings[settings.channelLabel].userSettings[key] = {"name": settings[key]};
-        }
-        return wrappedSettings;
-    }
+        return state;
+    },
 
-    function getKey(settingsMap) {
-        for (key in settingsMap) {
-            return key;
-        }
-    }
-
-    function log(type, text, force) {
-        if (force) {
-            console[type](util.inspect(text, {colors: true, depth: null}));
-        }
-    }
-
-    function setProp(property, propertyName, propertiesJSON) {
-        if (propertiesJSON.hasOwnProperty(propertyName) && propertiesJSON[propertyName]) {
-            property = propertiesJSON[propertyName];
-        } else {
-            log('log', propertyName + " not set");
-        }
-        return property;
-    }
-
-    function isInLocalStorage(settingsItem) {
-        var bool = false;
-        for (var i = 0; i < localStorage.length; i++) {
-            bool = true;
-            for (key in settingsItem) {
-                if (localStorage[i][key].indexOf(settingsItem[key]) == -1) {
-
-                    bool = false;
-                }
+    storeSettingsItem: function storeSettingsItem(state, resolve, reject) {
+        var _this = this;
+        this.stateStorage.store(state.channelLabel, state, function(err) {
+            if (err) {
+                log('warn', err, _this.debugMode);
+                return reject && reject(err);
             }
 
-            if (bool) {
-                break;
+            log('log', "Setting table updated.", _this.debugMode);
+            resolve && resolve();
+        });
+    },
 
+    deleteSettings: function deleteSettings(state, resolve, reject) {
+        var _this = this;
+        this.stateStorage.remove(state.channelLabel, function(err) {
+            if (err) {
+                log('warn', err, _this.debugMode);
+                return reject && reject(err);
             }
-        }
-        return bool;
 
+            log('log', "Setting table updated.", _this.debugMode);
+            resolve && resolve();
+        });
+    },
+
+    getAccessToken: function(credentials, callback) {
+        if (!this.options.auth) {
+            return callback();
+        }
+
+        this.oauthClient.getAccessToken(credentials, callback);
     }
 };
-module.exports = new VectorWatchStream();
+
+
+module.exports = {
+    /**
+     * @param options {Object}
+     * @returns {VectorWatchStreamNode}
+     */
+    createStreamNode: function(options) {
+        var node = new VectorWatchStreamNode(options);
+
+        if (options.registerSettings) {
+            node.registerSettings = options.registerSettings;
+        }
+        if (options.unregisterSettings) {
+            node.unregisterSettings = options.unregisterSettings;
+        }
+        if (options.requestConfig) {
+            node.requestConfig = options.requestConfig;
+        }
+        if (options.requestOptions) {
+            node.requestOptions = options.requestOptions;
+        }
+
+        return node;
+    }
+};
