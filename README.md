@@ -112,53 +112,53 @@ Apps
 <a name="VectorWatch"></a>
 ## VectorWatch
 <a name="VectorWatch.createStreamNode"></a>
-#### VectorWatch.createStreamNode()
+> ##### `VectorWatch.createStreamNode`()
 > Returns [StreamNode](#push)
 
 <a name="StreamNode"></a>
 ## StreamNode
 
 <a name="StreamNode.push"></a>
-#### .push(_{[State](#State)}_ state, _{String}_ data, _{Number}_ delay)
+> ##### `.push`([State](#State) `state`, String `data`, Number `delay`)
 
 <a name="StreamNode.pushNow"></a>
-#### .pushNow()
+> ##### `.pushNow`()
 
 <a name="StreamNode.authTokensForStateExpired"></a>
-#### .authTokensForStateExpired(_{[State](#State)}_ state)
+> ##### `.authTokensForStateExpired`([State](#State) `state`)
 
 <a name="StreamNode.retrieveSettings"></a>
-#### .retrieveSettings(_{Function}_ success, _{Function}_ fail)
+> ##### `.retrieveSettings`(Function `success`, Function `fail`)
 
 <a name="StreamNode.retrieveState"></a>
-#### .retrieveState(_{Function}_ success, _{Function}_ fail)
+> ##### `.retrieveState`(Function `success`, Function `fail`)
 
 <a name="StreamNode.getAuthTokensForState"></a>
-#### .getAuthTokensForState(_{[State](#State)}_ state, _{Function}_ callback)
+> ##### `.getAuthTokensForState`([State](#State) `state`, Function `callback`)
 
 <a name="StreamNode.dbCleanUp"></a>
-#### .dbCleanUp(_{Function}_ success, _{Function}_ fail)
+> ##### `.dbCleanUp`(Function `success`, Function `fail`)
 
 <a name="StreamNode.getMiddleware"></a>
-#### .getMiddleware()
+> ##### `.getMiddleware`()
 
 <a name="StreamNode.startStreamServer"></a>
-#### .startStreamServer(_{Number}_ port, _{Function}_ callback)
+> ##### `.startStreamServer`(Number `port`, Function `callback`)
 
 <a name="StreamNode.changeAuthTokensForState"></a>
-#### .changeAuthTokensForState(_{[State](#State)}_ state, _{[AuthTokens](#AuthTokens)}_ authTokens)
+> ##### `.changeAuthTokensForState`([State](#State) `state`, [AuthTokens](#AuthTokens) `authTokens`)
 
 <a name="StreamNode.registerSettings"></a>
-#### .registerSettings(_{Function}_ resolve, _{Function}_ reject, [State](#State) settings, _{[AuthTokens](#AuthTokens)}_ authTokens)
+> ##### `.registerSettings`(Function `resolve`, Function `reject`, [State](#State) `settings`, [AuthTokens](#AuthTokens) `authTokens`)
 
 <a name="StreamNode.unregisterSettings"></a>
-#### .unregisterSettings(_{[State](#State)}_ settings, _{[AuthTokens](#AuthTokens)}_ authTokens)
+> ##### `.unregisterSettings`([State](#State) `settings`, [AuthTokens](#AuthTokens) `authTokens`)
 
 <a name="StreamNode.requestConfig"></a>
-#### .requestConfig(_{Function}_ resolve, _{Function}_ reject, _{[AuthTokens](#AuthTokens)}_ authTokens)
+> ##### `.requestConfig`(Function `resolve`, Function `reject`, [AuthTokens](#AuthTokens) `authTokens`)
 
 <a name="StreamNode.requestOptions"></a>
-#### .requestOptions(_{Function}_ resolve, _{Function}_ reject, _{String}_ settingName, _{String}_ searchTerm, _{[State](#State)}_ settings, _{[AuthTokens](#AuthTokens)}_ authTokens)
+> ##### `.requestOptions`(Function `resolve`, Function `reject`, String `settingName`, String `searchTerm`, [State](#State) `settings`, [AuthTokens](#AuthTokens) `authTokens`)
 
 <a name="AppNode"></a>
 ## AppNode
