@@ -7,8 +7,16 @@ var express = require('express'),
     OAuthProvider = require('./lib/OAuthProvider.js'),
     Promise = require("node-promise").Promise,
     SendBuffer = require('./lib/SendBuffer.js'),
-    pushURL = 'http://52.16.43.57:8080/VectorCloud/rest/v1/stream/push',
+    pushURL = 'http://localhost:8080/VectorCloud/rest/v1/stream/push',
     privateMethods;
+
+var ERROR_CODES = {
+    "BAD_REQUEST": 400,
+    "INTERNAL_SERVER_ERROR": 500,
+    "INFORMATION_NOT_FOUND": 404,
+    "UNAUTHORIZED": 401,
+    "DEV_CODE_ERROR": 905//convention
+};
 
 function log(type, text, force) {
     if (force) {
@@ -68,7 +76,7 @@ var VectorWatchStreamNode = function VectorWatchStreamNode(options) {
     }
 
     this.sendBuffer = new SendBuffer();
-    this.sendBuffer.on('flush', function(packets) {
+    this.sendBuffer.on('flush', function (packets) {
         log('log', "The data is sent to VectorCloud.", true);
         log('log', packets, _this.debugMode);
         var options = {
@@ -106,18 +114,22 @@ VectorWatchStreamNode.prototype.registerSettings = function (resolve, reject, se
 
 /** This function is called every time a user removes the stream from a watch face.
  Called for public streams
+ * @param resolve {Function} DB update/delete success callback
+ * @param reject {Function} DB update/delete fail callback
  * @param settings {Object} User settings
  * @param authTokens {Object}
  * @returns {null}
  * */
-VectorWatchStreamNode.prototype.unregisterSettings = function (settings, authTokens) { };
+VectorWatchStreamNode.prototype.unregisterSettings = function (resolve, reject, settings, authTokens) {
+    resolve(settings.channelLabel);
+};
 
 /**
  * @param resolve {Function}
  * @param reject {Function}
  * @param authTokens {Object}
  */
-VectorWatchStreamNode.prototype.requestConfig = function(resolve, reject, authTokens) {
+VectorWatchStreamNode.prototype.requestConfig = function (resolve, reject, authTokens) {
     reject && reject(new Error('Not implemented.'));
 };
 
@@ -129,7 +141,7 @@ VectorWatchStreamNode.prototype.requestConfig = function(resolve, reject, authTo
  * @param state {Object}
  * @param authTokens {Object}
  */
-VectorWatchStreamNode.prototype.requestOptions = function(resolve, reject, settingName, searchTerm, state, authTokens) {
+VectorWatchStreamNode.prototype.requestOptions = function (resolve, reject, settingName, searchTerm, state, authTokens) {
     reject && reject(new Error('Not implemented.'));
 };
 
@@ -139,7 +151,7 @@ VectorWatchStreamNode.prototype.requestOptions = function(resolve, reject, setti
  * @param delayInMinutes {Number}
  * @returns {VectorWatchStreamNode}
  */
-VectorWatchStreamNode.prototype.push = function(state, data, delayInMinutes) {
+VectorWatchStreamNode.prototype.push = function (state, data, delayInMinutes) {
     delayInMinutes = delayInMinutes || 5;
     this.sendBuffer.add({
         type: 3,
@@ -153,7 +165,7 @@ VectorWatchStreamNode.prototype.push = function(state, data, delayInMinutes) {
 /**
  * @returns {VectorWatchStreamNode}
  */
-VectorWatchStreamNode.prototype.pushNow = function() {
+VectorWatchStreamNode.prototype.pushNow = function () {
     this.sendBuffer.flush();
     return this;
 };
@@ -162,7 +174,7 @@ VectorWatchStreamNode.prototype.pushNow = function() {
  * @param state {Object}
  * @returns {VectorWatchStreamNode}
  */
-VectorWatchStreamNode.prototype.authTokensForStateExpired = function(state) {
+VectorWatchStreamNode.prototype.authTokensForStateExpired = function (state) {
     this.sendBuffer.add({
         type: 5,
         streamUUID: this.streamUID,
@@ -183,7 +195,7 @@ VectorWatchStreamNode.prototype.authTokensForStateExpired = function(state) {
  **/
 VectorWatchStreamNode.prototype.retrieveSettings = VectorWatchStreamNode.prototype.retrieveState = function (resolve, reject) {
     var _this = this;
-    this.stateStorage.retrieveAll(function(err, states) {
+    this.stateStorage.retrieveAll(function (err, states) {
         if (err) {
             log('warn', err, _this.debugMode);
             return reject && reject(err);
@@ -193,7 +205,6 @@ VectorWatchStreamNode.prototype.retrieveSettings = VectorWatchStreamNode.prototy
             var state = states[channelLabel];
             state.channelLabel = channelLabel;
         }
-
         resolve && resolve(states || {});
     });
 };
@@ -202,7 +213,7 @@ VectorWatchStreamNode.prototype.retrieveSettings = VectorWatchStreamNode.prototy
  * @param state {Object}
  * @param callback {Function}
  */
-VectorWatchStreamNode.prototype.getAuthTokensForState = function(state, callback) {
+VectorWatchStreamNode.prototype.getAuthTokensForState = function (state, callback) {
     privateMethods.getAccessToken.call(this, state.__auth, callback);
 };
 
@@ -214,7 +225,7 @@ VectorWatchStreamNode.prototype.getAuthTokensForState = function(state, callback
  **/
 VectorWatchStreamNode.prototype.dbCleanUp = function (resolve, reject) {
     var _this = this;
-    this.stateStorage.removeAll(function(err) {
+    this.stateStorage.removeAll(function (err) {
         if (err) {
             log('warn', err, _this.debugMode);
             return reject && reject(err);
@@ -225,16 +236,16 @@ VectorWatchStreamNode.prototype.dbCleanUp = function (resolve, reject) {
     });
 };
 
-VectorWatchStreamNode.prototype.getMiddleware = function() {
+VectorWatchStreamNode.prototype.getMiddleware = function () {
     return this.app;
 };
 
-VectorWatchStreamNode.prototype.startStreamServer = function(port, callback) {
+VectorWatchStreamNode.prototype.startStreamServer = function (port, callback) {
     this.app.listen(port, callback);
 };
 
-VectorWatchStreamNode.prototype.changeAuthTokensForState = function(state, authTokens) {
-    this.oauthClient.storeAccessToken(state, authTokens, function() {
+VectorWatchStreamNode.prototype.changeAuthTokensForState = function (state, authTokens) {
+    this.oauthClient.storeAccessToken(state, authTokens, function () {
 
     });
 };
@@ -244,7 +255,7 @@ privateMethods = {
     setupRouter: function () {
         var _this = this;
         this.app = express();
-        this.app.use(bodyParser.urlencoded({ extended: true })); //support x-www-form-urlencoded
+        this.app.use(bodyParser.urlencoded({extended: true})); //support x-www-form-urlencoded
         this.app.use(bodyParser.json());
         this.app.use(expressValidator());
         this.app.use(function (req, res, next) {
@@ -252,7 +263,7 @@ privateMethods = {
             next();
         });
 
-        this.app.post('/callback', function (req, res, next) {
+        this.app.post('/api/callback', function (req, res, next) {
             req.assert('eventType', 'Event type is required').notEmpty();
             log('log', req.body, _this.debugMode);
             var errors = req.validationErrors();
@@ -285,60 +296,81 @@ privateMethods = {
         });
     },
 
+    /*
+     * Handles settings registration(insert or update count field) and returns the corresponding stream data calling the user defined
+     * */
     registerHandler: function registerHandler(state, channelLabel, response) {
         var promise = new Promise(), _this = this;
         promise.then(function (streamValue) {
             log('log', "Registration successfull, the response containing " + streamValue + " is being sent", true);
-
             response.status(200).json({
                 v: 1,
-                p: [
-                    {
-                        type: 3,
-                        streamUUID: _this.streamUID,
-                        channelLabel: channelLabel,
-                        d: streamValue
-                    }
-                ]
+                p: [{
+                    type: 3,
+                    streamUUID: _this.streamUID,
+                    channelLabel: channelLabel,
+                    d: streamValue
+                }]
             });
         }, function (reason, statusCode) {
             log('log', "Registration unsuccessfull, the response containing the error message is being sent", true);
-            response.status(statusCode || 400).json(reason);
+            privateMethods.errorHandler(response, reason, statusCode);
         });
 
-        privateMethods.storeSettingsItem.call(
-            this, state,
-            function() {
-                privateMethods.getAccessToken.call(_this, state.__auth, function(err, tokens) {
-                    if (err) return promise.reject(err);
-
-                    _this.registerSettings(function (result) {
-                        promise.resolve(result);
-                    }, function (err) {
-                        promise.reject(err);
-                    }, state, tokens);
+        privateMethods.storeSettingsItem.call(this, state, function () {
+                privateMethods.getAccessToken.call(_this, state.__auth, function (err, tokens) {
+                    if (err) {
+                        return promise.reject(err, ERROR_CODES.UNAUTHORIZED);
+                    }
+                    try {
+                        _this.registerSettings(function (result) {
+                            promise.resolve(result);
+                        }, function (err) {
+                            promise.reject(err);
+                        }, state, tokens);
+                    } catch (err) {
+                        promise.reject(err, ERROR_CODES.DEV_CODE_ERROR);
+                    }
                 });
             },
             function (err) {
-                promise.reject(err);
+                log('error', "Settings could not be persisted:" + err, true);
+                promise.reject(err, ERROR_CODES.INTERNAL_SERVER_ERROR);
             }
         );
     },
 
+    /*
+     * Handles settings unregistration(delete or update count field)
+     * */
     unregisterHandler: function unregisterHandler(state, response) {
-        var _this = this;
-        privateMethods.deleteSettings.call(
-            this, state,
-            function() {
-                privateMethods.getAccessToken.call(_this, state.__auth, function(err, tokens) {
-                    if (err) return response.sendStatus(500);
+        var promise = new Promise(), _this = this;
+        promise.then(function (settings) {
+            log('log', "Unregistration successfull for channel label:" + settings.channelLabel, true);
+            response.status(200);
+        }, function (reason, statusCode) {
+            log('log', "Unregistration unsuccessfull", true);
+            privateMethods.errorHandler(response, reason, statusCode);
+        });
 
-                    _this.unregisterSettings(state, tokens);
-                    response.sendStatus(200);
+        privateMethods.deleteSettings.call(this, state, function () {
+                privateMethods.getAccessToken.call(_this, state.__auth, function (err, tokens) {
+                    if (err) {
+                        return promise.reject(err, ERROR_CODES.UNAUTHORIZED);
+                    }
+                    try {
+                        _this.unregisterSettings(function () {
+                            promise.resolve();
+                        }, function (err) {
+                            promise.reject(err);
+                        }, state, tokens);
+                    } catch (err) {
+                        promise.reject(err, ERROR_CODES.DEV_CODE_ERROR);
+                    }
                 });
             },
-            function () {
-                response.sendStatus(500);
+            function (err) {
+                promise.reject(err, ERROR_CODES.INTERNAL_SERVER_ERROR);
             }
         );
     },
@@ -349,20 +381,22 @@ privateMethods = {
         }
 
         var promise = new Promise(), _this = this;
-        promise.then(function(authMethod) {
+        promise.then(function (authMethod) {
             log('log', "Request auth method successfull, the response containing " + authMethod + " is being sent", true);
 
             response.status(200).json({
                 v: 1,
                 p: authMethod
             });
-        }, function(reason, statusCode) {
+        }, function (reason, statusCode) {
             log('log', "Request auth method unsuccessfull, the response containing the error message is being sent.", true);
-            response.status(statusCode || 400).json(reason);
+            privateMethods.errorHandler(response, reason, statusCode);
         });
 
-        this.oauthClient.getAuthorizationUrl(function(err, url) {
-            if (err) return promise.reject(err);
+        this.oauthClient.getAuthorizationUrl(function (err, url) {
+            if (err) {
+                return promise.reject(err, ERROR_CODES.BAD_REQUEST);
+            }
 
             promise.resolve({
                 protocol: _this.oauthClient.getProtocolName(),
@@ -374,32 +408,35 @@ privateMethods = {
 
     configHandler: function configHandler(auth, response) {
         var promise = new Promise(), _this = this;
-        promise.then(function(config) {
+        promise.then(function (config) {
             log('log', "Request stream config successful, the response containing " + config + " is being sent", true);
 
             response.status(200).json({
                 v: 1,
                 p: config
             });
-        }, function(reason, statusCode) {
+        }, function (reason, statusCode) {
             log('log', "Request config unsuccessful, the response containing the error message is being sent.", true);
-            response.status(statusCode || 400).json(reason);
+            privateMethods.errorHandler(response, reason, statusCode);
         });
 
-        privateMethods.getAccessToken.call(this, auth, function(err, tokens) {
+        privateMethods.getAccessToken.call(this, auth, function (err, tokens) {
             if (err) return promise.reject(err);
-
-            _this.requestConfig(function(result) {
-                promise.resolve(result);
-            }, function(err) {
-                promise.reject(err);
-            }, tokens);
+            try {
+                _this.requestConfig(function (result) {
+                    promise.resolve(result);
+                }, function (err) {
+                    promise.reject(err);
+                }, tokens);
+            } catch (error) {
+                promise.reject(error, ERROR_CODES.DEV_CODE_ERROR);
+            }
         });
     },
 
     optionsHandler: function optionsHandler(settingName, searchTerm, state, response) {
         var promise = new Promise(), _this = this;
-        promise.then(function(options) {
+        promise.then(function (options) {
             log('log', "Request options successful, the response containing " + options + " is being sent", true);
 
             response.status(200).json({
@@ -408,21 +445,25 @@ privateMethods = {
             });
         }, function (reason, statusCode) {
             log('log', "Request options unsuccessful, the response containing the error message is being sent.", true);
-            response.status(statusCode || 400).json(reason);
+            privateMethods.errorHandler(response, reason, statusCode);
         });
 
-        privateMethods.getAccessToken.call(this, state.__auth, function(err, tokens) {
-            _this.requestOptions(function (result) {
-                promise.resolve(result);
-            }, function (err) {
-                promise.reject(err);
-            }, settingName, searchTerm, state, tokens);
+        privateMethods.getAccessToken.call(this, state.__auth, function (err, tokens) {
+            try {
+                _this.requestOptions(function (result) {
+                    promise.resolve(result);
+                }, function (err) {
+                    promise.reject(err);
+                }, settingName, searchTerm, state, tokens);
+            } catch (error) {
+                promise.reject(error, ERROR_CODES.DEV_CODE_ERROR);
+            }
         });
     },
 
     getStateFromRequest: function getStateFromRequest(req) {
-        var cleanUserSettings = function(userSettings) {
-            var cleaned = { };
+        var cleanUserSettings = function (userSettings) {
+            var cleaned = {};
             for (var setting in userSettings) {
                 var settingObject = userSettings[setting];
                 var value = settingObject.value;
@@ -453,7 +494,7 @@ privateMethods = {
 
     storeSettingsItem: function storeSettingsItem(state, resolve, reject) {
         var _this = this;
-        this.stateStorage.store(state.channelLabel, state, function(err) {
+        this.stateStorage.store(state.channelLabel, state, function (err) {
             if (err) {
                 log('warn', err, _this.debugMode);
                 return reject && reject(err);
@@ -466,7 +507,7 @@ privateMethods = {
 
     deleteSettings: function deleteSettings(state, resolve, reject) {
         var _this = this;
-        this.stateStorage.remove(state.channelLabel, function(err) {
+        this.stateStorage.remove(state.channelLabel, function (err) {
             if (err) {
                 log('warn', err, _this.debugMode);
                 return reject && reject(err);
@@ -477,12 +518,32 @@ privateMethods = {
         });
     },
 
-    getAccessToken: function(credentials, callback) {
+    getAccessToken: function (credentials, callback) {
         if (!this.options.auth) {
             return callback();
         }
 
         this.oauthClient.getAccessToken(credentials, callback);
+    },
+
+    errorHandler: function (response, reason, statusCode) {
+        switch (statusCode) {
+            case ERROR_CODES.INTERNAL_SERVER_ERROR:
+                log('error', "stream-dev-tools internal error:" + reason, true);
+                break;
+            case ERROR_CODES.UNAUTHORIZED:
+                log('error', "The user is not logged in:" + reason, true);
+                break;
+            case ERROR_CODES.DEV_CODE_ERROR:
+                log('error', "Dev code error:" + reason, true);
+                break;
+            case ERROR_CODES.BAD_REQUEST:
+                log('error', "Bad request:" + reason, true);
+                break;
+            default:
+                log('log', "Status error" + statusCode, true);
+        }
+        response.status(statusCode || ERROR_CODES.BAD_REQUEST).json({"Error": reason.toString()});
     }
 };
 
@@ -492,7 +553,7 @@ module.exports = {
      * @param options {Object}
      * @returns {VectorWatchStreamNode}
      */
-    createStreamNode: function(options) {
+    createStreamNode: function (options) {
         var node = new VectorWatchStreamNode(options);
 
         if (options.registerSettings) {
