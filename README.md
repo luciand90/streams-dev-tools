@@ -254,12 +254,14 @@ This object tells the phone application what are the stream settings and how to 
 
 <a name="AuthTokens"></a>
 ## AuthTokens : Object
-This objects holds the OAuth tokens required for authorization.
+This class holds the tokens required for authorization.
+> This class is abstract, see [OAuth1Tokens] and [OAuth2Tokens] for concrete implementations.
+
+<a name="OAuth1AuthTokens"></a>
+## OAuth1Tokens : AuthTokens
 #### Properties
-- `oauth_access_token` [String] \(only present for the 1.0 protocol version)
-- `oauth_access_token_secret` [String] \(only present for the 1.0 protocol version)
-- `access_token` [String] \(only present for the 2.0 protocol version)
-- `refresh_token` [String] \(optional, only present for the 2.0 protocol version)
+- `oauth_access_token` [String]
+- `oauth_access_token_secret` [String]
 
 #### Example
 
@@ -267,6 +269,20 @@ This objects holds the OAuth tokens required for authorization.
 {
 	"oauth_access_token": "...",
 	"oauth_access_token_secret": "..."
+}
+```
+
+<a name="OAuth2AuthTokens"></a>
+## OAuth2Tokens : AuthTokens
+#### Properties
+- `access_token` [String]
+- `refresh_token` [String] \(optional)
+
+#### Example
+
+```json
+{
+	"access_token": "..."
 }
 ```
 
@@ -281,6 +297,8 @@ This objects holds the OAuth tokens required for authorization.
 [Config]: #Config
 [State]: #State
 [AuthTokens]: #AuthTokens
+[OAuth1Tokens]: #OAuth1Tokens
+[OAuth2Tokens]: #OAuth2Tokens
 [SettingValue]: #SettingValue
 [RenderOption]: #RenderOption
 [AppNode]: #AppNode
