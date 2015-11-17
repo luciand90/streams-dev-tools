@@ -76,11 +76,11 @@ Apps
 
 # API Reference
 ## Summary
-### [VectorWatch](#VectorWatch)
+### [VectorWatch]
 ###### Static Methods
 * [createStreamNode](#VectorWatch.createStreamNode)
 
-### [StreamNode](#StreamNode)
+### [StreamNode]
 ###### Methods
 * [push](#StreamNode.push)
 * [pushNow](#StreamNode.pushNow)
@@ -99,7 +99,7 @@ Apps
 * [requestConfig](#StreamNode.requestConfig)
 * [requestOptions](#StreamNode.requestOptions)
 
-### [AppNode](#AppNode)
+### [AppNode]
 ###### Methods
 * [getMiddleware](#AppNode.getMiddleware)
 * [startAppServer](#AppNode.startAppServer)
@@ -110,63 +110,57 @@ Apps
 * [callMethod](#AppNode.callMethod)
 
 <a name="VectorWatch"></a>
-## VectorWatch
+## VectorWatch : Object
+#### Methods
 <a name="VectorWatch.createStreamNode"></a>
-> ##### `VectorWatch.createStreamNode`()
-> Returns [StreamNode](#push)
+
+- `VectorWatch.createStreamNode`([Config] `options`) &rarr; [StreamNode]
 
 <a name="StreamNode"></a>
-## StreamNode
+## StreamNode : Object
+#### Properties
+- `stateStorage`
+- `authStorage`
 
-<a name="StreamNode.push"></a>
-> ##### `.push`([State](#State) `state`, String `data`, Number `delay`)
+#### Methods
+- <a name="StreamNode.push"></a>`.push`([State] `state`, [String] `data`, [Number]`delay`) &rarr; [StreamNode]
 
-<a name="StreamNode.pushNow"></a>
-> ##### `.pushNow`()
+- <a name="StreamNode.pushNow"></a>`.pushNow`() &rarr; [StreamNode]
 
-<a name="StreamNode.authTokensForStateExpired"></a>
-> ##### `.authTokensForStateExpired`([State](#State) `state`)
+- <a name="StreamNode.authTokensForStateExpired"></a>`.authTokensForStateExpired`([State] `state`) &rarr; [StreamNode]
 
-<a name="StreamNode.retrieveSettings"></a>
-> ##### `.retrieveSettings`(Function `success`, Function `fail`)
+- <a name="StreamNode.retrieveSettings"></a>`.retrieveSettings`([Function]<[State]\[\]> `success`, [Function]<[Error]> `fail`) &rarr; `undefined`
 
-<a name="StreamNode.retrieveState"></a>
-> ##### `.retrieveState`(Function `success`, Function `fail`)
+- <a name="StreamNode.retrieveState"></a>`.retrieveState` alias of [`.retrieveSettings`](#StreamNode.retrieveSettings)
 
-<a name="StreamNode.getAuthTokensForState"></a>
-> ##### `.getAuthTokensForState`([State](#State) `state`, Function `callback`)
+- <a name="StreamNode.getAuthTokensForState"></a>`.getAuthTokensForState`([State] `state`, [Function]<[Error], [AuthTokens]> `callback`) &rarr; `undefined`
 
-<a name="StreamNode.dbCleanUp"></a>
-> ##### `.dbCleanUp`(Function `success`, Function `fail`)
+- <a name="StreamNode.dbCleanUp"></a>`.dbCleanUp`([Function] `success`, [Function]<[Error]> `fail`) &rarr; `undefined`
 
-<a name="StreamNode.getMiddleware"></a>
-> ##### `.getMiddleware`()
+- <a name="StreamNode.getMiddleware"></a>`.getMiddleware`() &rarr; [Function]<[Request], [Response], [Function]>
 
-<a name="StreamNode.startStreamServer"></a>
-> ##### `.startStreamServer`(Number `port`, Function `callback`)
+- <a name="StreamNode.startStreamServer"></a>`.startStreamServer`([Number] `port`, [Function] `callback`) &rarr; `undefined`
 
-<a name="StreamNode.changeAuthTokensForState"></a>
-> ##### `.changeAuthTokensForState`([State](#State) `state`, [AuthTokens](#AuthTokens) `authTokens`)
+- <a name="StreamNode.changeAuthTokensForState"></a>`.changeAuthTokensForState`([State] `state`, [AuthTokens] `authTokens`) &rarr; `undefined`
 
-<a name="StreamNode.registerSettings"></a>
-> ##### `.registerSettings`(Function `resolve`, Function `reject`, [State](#State) `settings`, [AuthTokens](#AuthTokens) `authTokens`)
-
-<a name="StreamNode.unregisterSettings"></a>
-> ##### `.unregisterSettings`([State](#State) `settings`, [AuthTokens](#AuthTokens) `authTokens`)
-
-<a name="StreamNode.requestConfig"></a>
-> ##### `.requestConfig`(Function `resolve`, Function `reject`, [AuthTokens](#AuthTokens) `authTokens`)
-
-<a name="StreamNode.requestOptions"></a>
-> ##### `.requestOptions`(Function `resolve`, Function `reject`, String `settingName`, String `searchTerm`, [State](#State) `settings`, [AuthTokens](#AuthTokens) `authTokens`)
+#### Events (overridable methods)
+- <a name="StreamNode.registerSettings"></a>`.registerSettings`([Function] `resolve`, [Function] `reject`, [State] `settings`, [AuthTokens] `authTokens`)
+- <a name="StreamNode.unregisterSettings"></a>`.unregisterSettings`([State] `settings`, [AuthTokens] `authTokens`)
+- <a name="StreamNode.requestConfig"></a>`.requestConfig`([Function] `resolve`, [Function] `reject`, [AuthTokens] `authTokens`)
+- <a name="StreamNode.requestOptions"></a>`.requestOptions`([Function] `resolve`, [Function] `reject`, [String] `settingName`, [String] `searchTerm`, [State] `settings`, [AuthTokens] `authTokens`)
 
 <a name="AppNode"></a>
-## AppNode
+## AppNode : Object
 > TODO
 
 <a name="State"></a>
-## State
-Example:
+## State : Object
+#### Properties
+- `__auth` [Object] \(for internal use only)
+- `channelLabel` [String] \(optional)
+- `{setting name}` [SettingValue] \(there is a property for each setting)
+
+#### Example:
 
 ```json
 {
@@ -181,8 +175,14 @@ Example:
 ```
 
 <a name="Config"></a>
-## Config
-Example:
+## Config : Object
+This object tells the phone application what are the stream settings and how to display them
+
+- `renderOptions` [Object]<[String], [RenderOption]>
+- `settings` [Object]<[String], [SettingValue][]>
+- `defaults` [Object]<[String], [SettingValue]>
+
+#### Example
 
 ```json
 {
@@ -216,3 +216,91 @@ Example:
 	}
 }
 ```
+
+<a name="RenderOption"></a>
+## RenderOption : Object
+#### Properties
+- `name` [String] \(can be omitted if this in the value of a property with the same name)
+- `type` [String] \(one of the following: `GRID_LAYOUT`, `INPUT_LIST` or `INPUT_LIST_STRICT`)
+- `hint` [String] \(optional)
+- `order` [Number] \(required if more than a [RenderOption] is specified)
+- `dataType` [String] \(one of the following: `STATIC` or `DYNAMIC`)
+- `asYouType` [Boolean] \(required if `dataType` is `DYNAMIC`)
+- `minChars` [Number] \(required if `asYouType` is `true`)
+
+#### Example
+
+```json
+{
+	"type": "GRID_LAYOUT",
+	"dataType": "STATIC"
+}
+```
+
+<a name="SettingValue"></a>
+## SettingValue : Object
+#### Properties
+- `name` [String] \(can be omitted if this is the value of a property with the same name)
+- `value` [Object] \(can be anything, but most of the times this will be [String])
+
+#### Example
+
+```json
+{
+	"name": "Option #1",
+	"value": "1"
+}
+```
+
+<a name="AuthTokens"></a>
+## AuthTokens : Object
+This class holds the tokens required for authorization.
+> This class is abstract, see [OAuth1Tokens] and [OAuth2Tokens] for concrete implementations.
+
+<a name="OAuth1AuthTokens"></a>
+## OAuth1Tokens : AuthTokens
+#### Properties
+- `oauth_access_token` [String]
+- `oauth_access_token_secret` [String]
+
+#### Example
+
+```json
+{
+	"oauth_access_token": "...",
+	"oauth_access_token_secret": "..."
+}
+```
+
+<a name="OAuth2AuthTokens"></a>
+## OAuth2Tokens : AuthTokens
+#### Properties
+- `access_token` [String]
+- `refresh_token` [String] \(optional)
+
+#### Example
+
+```json
+{
+	"access_token": "..."
+}
+```
+
+[String]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String
+[Number]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number
+[Function]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function
+[Request]: https://nodejs.org/api/http.html#http_http_incomingmessage
+[Response]: https://nodejs.org/api/http.html#http_class_http_serverresponse
+[Object]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object
+[Boolean]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Boolean
+[StreamNode]: #StreamNode
+[Config]: #Config
+[State]: #State
+[AuthTokens]: #AuthTokens
+[OAuth1Tokens]: #OAuth1Tokens
+[OAuth2Tokens]: #OAuth2Tokens
+[SettingValue]: #SettingValue
+[RenderOption]: #RenderOption
+[AppNode]: #AppNode
+[Error]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error
+[VectorWatch]: #VectorWatch
