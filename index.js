@@ -8,6 +8,8 @@ var express = require('express'),
     Promise = require("node-promise").Promise,
     SendBuffer = require('./lib/SendBuffer.js'),
     pushURL = 'http://localhost:8080/VectorCloud/rest/v1/stream/push',
+    Logstash = require('logstash-client'),
+    ip = require('ip')
     privateMethods;
 
 var ERROR_CODES = {
@@ -15,14 +17,44 @@ var ERROR_CODES = {
     "INTERNAL_SERVER_ERROR": 500,
     "INFORMATION_NOT_FOUND": 404,
     "UNAUTHORIZED": 401,
-    "DEV_CODE_ERROR": 905//convention
+    "DEV_CODE_ERROR": 500
 };
 
-function log(type, text, force) {
-    if (force) {
-        console[type](util.inspect(text, {colors: true, depth: null}));
+/**********Logging**********/
+var LogLevels = {
+    error: 'error',
+    warning: 'warn',
+    info: 'log'
+};
+
+var ipAddress = ip.address();
+var logstashInstance = new Logstash({
+    type: 'tcp',
+    host: '52.18.56.123',
+    port: 8000,
+    format: function (message) {
+        return JSON.stringify(message);
+    }
+});
+function log(logText, level, show, stash) {
+    var date = new Date();
+    if (!level) {
+        level = LogLevels.info;
+    }
+    if (show) {
+        console[logText](util.inspect("[" + date + "] " + logText, {colors: true, depth: null}));
+    }
+    if (stash) {
+        logstashInstance.send({
+            '@timestamp': date,
+            'serverIPAddress': ipAddress,
+            'streamUUID': weatherStreamUUID,
+            'message': logText,
+            'level': level
+        });
     }
 }
+/**********Logging**********/
 
 function establishDBConnection(dbSettings) {
     if (dbSettings.connection) return dbSettings.connection;
@@ -37,6 +69,7 @@ var VectorWatchStreamNode = function VectorWatchStreamNode(options) {
     }
     this.options = options;
     this.debugMode = false;
+    this.logstash = false;
     var _this = this;
 
     if (!options.token) {
@@ -51,7 +84,7 @@ var VectorWatchStreamNode = function VectorWatchStreamNode(options) {
 
     if (options.database) {
         var connection = establishDBConnection(options.database);
-
+        this.dbConnection = connection;
         var MysqlStorageProvider = require('./lib/StorageProviders/MysqlStorageProvider.js');
         this.authStorage = new MysqlStorageProvider({
             connection: connection,
@@ -77,8 +110,8 @@ var VectorWatchStreamNode = function VectorWatchStreamNode(options) {
 
     this.sendBuffer = new SendBuffer();
     this.sendBuffer.on('flush', function (packets) {
-        log('log', "The data is sent to VectorCloud.", true);
-        log('log', packets, _this.debugMode);
+        log("The data is sent to VectorCloud.", LogLevels.info, true, _this.logstash);
+        log(packets, LogLevels.info, _this.debugMode, _this.logstash);
         var options = {
             uri: pushURL,
             method: 'POST',
@@ -87,9 +120,9 @@ var VectorWatchStreamNode = function VectorWatchStreamNode(options) {
         };
         request(options, function (err, response, body) {
             if (!err && response.statusCode == 200) {
-                log('log', body, _this.debugMode);
+                log(body, LogLevels.info, _this.debugMode, _this.logstash);
             } else {
-                log('log', err, _this.debugMode);
+                log(err, LogLevels.error, _this.debugMode, _this.logstash);
             }
         });
     });
@@ -197,7 +230,7 @@ VectorWatchStreamNode.prototype.retrieveSettings = VectorWatchStreamNode.prototy
     var _this = this;
     this.stateStorage.retrieveAll(function (err, states) {
         if (err) {
-            log('warn', err, _this.debugMode);
+            log(err, LogLevels.warning, true, _this.logstash);
             return reject && reject(err);
         }
 
@@ -227,11 +260,11 @@ VectorWatchStreamNode.prototype.dbCleanUp = function (resolve, reject) {
     var _this = this;
     this.stateStorage.removeAll(function (err) {
         if (err) {
-            log('warn', err, _this.debugMode);
+            log(err, LogLevels.warning, true, _this.logstash);
             return reject && reject(err);
         }
 
-        log('log', "Deleted all rows", _this.debugMode);
+        log("Deleted all rows", LogLevels.info, true, _this.logstash);
         resolve && resolve();
     });
 };
@@ -259,20 +292,20 @@ privateMethods = {
         this.app.use(bodyParser.json());
         this.app.use(expressValidator());
         this.app.use(function (req, res, next) {
-            log('log', req.method + '' + req.url, _this.debugMode);
+            log(req.method + '' + req.url, LogLevels.info, true, _this.logstash);
             next();
         });
 
         this.app.post('/api/callback', function (req, res, next) {
             req.assert('eventType', 'Event type is required').notEmpty();
-            log('log', req.body, _this.debugMode);
+            log(req.body, LogLevels.info, true, _this.logstash);
             var errors = req.validationErrors();
             if (errors) {
-                log('warn', "Vaidation errors encountered", _this.debugMode);
+                log("Validation errors encountered", LogLevels.warning, true, _this.logstash);
                 res.status(400).json(errors);
                 return;
             }
-            log('log', "Request passed validation", _this.debugMode);
+            log("Request passed validation", LogLevels.warning, true, _this.logstash);
             var eventType = req.body.eventType;
 
             var state = privateMethods.getStateFromRequest.call(_this, req);
@@ -302,7 +335,7 @@ privateMethods = {
     registerHandler: function registerHandler(state, channelLabel, response) {
         var promise = new Promise(), _this = this;
         promise.then(function (streamValue) {
-            log('log', "Registration successfull, the response containing " + streamValue + " is being sent", true);
+            log("Registration successfull, the response containing " + streamValue + " is being sent", LogLevels.warning, true, _this.logstash);
             response.status(200).json({
                 v: 1,
                 p: [{
@@ -313,31 +346,30 @@ privateMethods = {
                 }]
             });
         }, function (reason, statusCode) {
-            log('log', "Registration unsuccessfull, the response containing the error message is being sent", true);
+            log("Registration unsuccessfull, the response containing the error message is being sent", LogLevels.warning, true, _this.logstash);
             privateMethods.errorHandler(response, reason, statusCode);
         });
 
-        privateMethods.storeSettingsItem.call(this, state, function () {
-                privateMethods.getAccessToken.call(_this, state.__auth, function (err, tokens) {
-                    if (err) {
-                        return promise.reject(err, ERROR_CODES.UNAUTHORIZED);
-                    }
-                    try {
-                        _this.registerSettings(function (result) {
-                            promise.resolve(result);
-                        }, function (err) {
-                            promise.reject(err);
-                        }, state, tokens);
-                    } catch (err) {
-                        promise.reject(err, ERROR_CODES.DEV_CODE_ERROR);
-                    }
-                });
-            },
-            function (err) {
-                log('error', "Settings could not be persisted:" + err, true);
-                promise.reject(err, ERROR_CODES.INTERNAL_SERVER_ERROR);
+        privateMethods.getAccessToken.call(_this, state.__auth, function (err, tokens) {
+            if (err) {
+                return promise.reject(err, ERROR_CODES.UNAUTHORIZED);
             }
-        );
+            try {
+                _this.registerSettings(function (result) {
+                    privateMethods.storeSettingsItem.call(_this, state, function () {
+                        promise.resolve(result);
+                    }, function (err) {
+                        log("Settings could not be persisted:" + err, LogLevels.error, true, _this.logstash);
+                        promise.reject(err, ERROR_CODES.INTERNAL_SERVER_ERROR);
+                    });
+
+                }, function (err) {
+                    promise.reject(err);
+                }, state, tokens);
+            } catch (err) {
+                promise.reject(err, ERROR_CODES.DEV_CODE_ERROR);
+            }
+        });
     },
 
     /*
@@ -346,10 +378,10 @@ privateMethods = {
     unregisterHandler: function unregisterHandler(state, response) {
         var promise = new Promise(), _this = this;
         promise.then(function (settings) {
-            log('log', "Unregistration successfull for channel label:" + settings.channelLabel, true);
+            log("Unregistration successfull for channel label:" + settings.channelLabel, LogLevels.info, true, _this.logstash);
             response.status(200);
         }, function (reason, statusCode) {
-            log('log', "Unregistration unsuccessfull", true);
+            log("Unregistration unsuccessfull", LogLevels.error, true, _this.logstash);
             privateMethods.errorHandler(response, reason, statusCode);
         });
 
@@ -382,14 +414,13 @@ privateMethods = {
 
         var promise = new Promise(), _this = this;
         promise.then(function (authMethod) {
-            log('log', "Request auth method successfull, the response containing " + authMethod + " is being sent", true);
-
+            log("Request auth method successfull, the response containing " + authMethod + " is being sent", LogLevels.info, true, _this.logstash);
             response.status(200).json({
                 v: 1,
                 p: authMethod
             });
         }, function (reason, statusCode) {
-            log('log', "Request auth method unsuccessfull, the response containing the error message is being sent.", true);
+            log("Request auth method unsuccessfull, the response containing the error message is being sent.", LogLevels.error, true, _this.logstash);
             privateMethods.errorHandler(response, reason, statusCode);
         });
 
@@ -409,14 +440,13 @@ privateMethods = {
     configHandler: function configHandler(auth, response) {
         var promise = new Promise(), _this = this;
         promise.then(function (config) {
-            log('log', "Request stream config successful, the response containing " + config + " is being sent", true);
-
+            log("Request stream config successful, the response containing " + config + " is being sent", LogLevels.info, true, _this.logstash);
             response.status(200).json({
                 v: 1,
                 p: config
             });
         }, function (reason, statusCode) {
-            log('log', "Request config unsuccessful, the response containing the error message is being sent.", true);
+            log("Request config unsuccessful, the response containing the error message is being sent.", LogLevels.error, true, _this.logstash);
             privateMethods.errorHandler(response, reason, statusCode);
         });
 
@@ -437,14 +467,13 @@ privateMethods = {
     optionsHandler: function optionsHandler(settingName, searchTerm, state, response) {
         var promise = new Promise(), _this = this;
         promise.then(function (options) {
-            log('log', "Request options successful, the response containing " + options + " is being sent", true);
-
+            log("Request options successful, the response containing " + options + " is being sent", LogLevels.info, true, _this.logstash);
             response.status(200).json({
                 v: 1,
                 p: options
             });
         }, function (reason, statusCode) {
-            log('log', "Request options unsuccessful, the response containing the error message is being sent.", true);
+            log("Request options unsuccessful, the response containing the error message is being sent.", LogLevels.error, true, _this.logstash);
             privateMethods.errorHandler(response, reason, statusCode);
         });
 
@@ -496,11 +525,10 @@ privateMethods = {
         var _this = this;
         this.stateStorage.store(state.channelLabel, state, function (err) {
             if (err) {
-                log('warn', err, _this.debugMode);
+                log(err, LogLevels.warning, true, _this.logstash);
                 return reject && reject(err);
             }
-
-            log('log', "Setting table updated.", _this.debugMode);
+            log("Setting table updated.", LogLevels.info, true, _this.logstash);
             resolve && resolve();
         });
     },
@@ -509,11 +537,10 @@ privateMethods = {
         var _this = this;
         this.stateStorage.remove(state.channelLabel, function (err) {
             if (err) {
-                log('warn', err, _this.debugMode);
+                log(err, LogLevels.warning, true, _this.logstash);
                 return reject && reject(err);
             }
-
-            log('log', "Setting table updated.", _this.debugMode);
+            log("Settings deleted.", LogLevels.info, true, _this.logstash);
             resolve && resolve();
         });
     },
@@ -529,24 +556,23 @@ privateMethods = {
     errorHandler: function (response, reason, statusCode) {
         switch (statusCode) {
             case ERROR_CODES.INTERNAL_SERVER_ERROR:
-                log('error', "stream-dev-tools internal error:" + reason, true);
+                log("stream-dev-tools internal error: " + reason, LogLevels.error, true, _this.logstash);
                 break;
             case ERROR_CODES.UNAUTHORIZED:
-                log('error', "The user is not logged in:" + reason, true);
+                log("The user is not logged in: " + reason, LogLevels.error, true, _this.logstash);
                 break;
             case ERROR_CODES.DEV_CODE_ERROR:
-                log('error', "Dev code error:" + reason, true);
+                log('error', "Dev code error: " + reason, true);
                 break;
             case ERROR_CODES.BAD_REQUEST:
-                log('error', "Bad request:" + reason, true);
+                log("Bad request: " + reason, LogLevels.error, true, _this.logstash);
                 break;
             default:
-                log('log', "Status error" + statusCode, true);
+                log("Status error: " + reason, LogLevels.error, true, _this.logstash);
         }
         response.status(statusCode || ERROR_CODES.BAD_REQUEST).json({"Error": reason.toString()});
     }
 };
-
 
 module.exports = {
     /**
