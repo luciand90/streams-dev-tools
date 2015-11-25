@@ -25,6 +25,8 @@
     "node-promise": "^0.5.12",
     "node-schedule": "*",
     "oauth": "^0.9.14",
-    "request": "*"
+    "request": "*",
+    "logstash-client": "~1.0.0",
+    "colors": "~1.1.2"
   }
 }
