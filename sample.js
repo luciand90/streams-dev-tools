@@ -1,9 +1,9 @@
 var streamDevTools = require('./index.js');
 var configJSON = {
-    streamUUID: "C7CDA694F1CCA72F4D0ADA1DF5989397",
+    streamUUID: "***",
     streamType: "public",
     hasSettings: true,
-    token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ7XCJ1c2VySURcIjoyODM5LFwidXNlcm5hbWVcIjpcImx1Y2lhbi5kaWFjb25lc2N1LnRlc3QyQHZlY3RvcndhdGNoLmNvbVwiLFwicm9sZVwiOlwiVVNFUlwiLFwid2F0Y2hJZFwiOi0xfSIsImlzcyI6Imh0dHBzOlwvXC92ZWN0b3J3YXRjaC5jb20iLCJpYXQiOjE0NDgzNTU5MDF9.pe3B-uu3bUYPSDzc-R3fRVK3Rr1lMR4d4XufWq6bxyE",
+    token: "***",
     portNumber: "2999"
 };
 var sample_stream = streamDevTools.createStreamNode(configJSON);
