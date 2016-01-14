@@ -320,7 +320,7 @@ var productionBaseURL = 'https://endpoint.vector.watch/VectorCloud/rest/',
                 } else if (eventType == "REQ_AUTH") {
                     privateMethods.authHandler.call(_this, res);
                 } else if (eventType == "REQ_CONFIG") {
-                    privateMethods.configHandler.call(_this, state.__auth, res);
+                    privateMethods.configHandler.call(_this, state, res);//
                 } else if (eventType == "REQ_OPTS") {
                     req.assert('settingName', 'Setting name is required').notEmpty();
 
@@ -332,6 +332,7 @@ var productionBaseURL = 'https://endpoint.vector.watch/VectorCloud/rest/',
                 }
             });
         },
+
         /*
          * Handles settings registration(insert or update count field) and returns the corresponding stream data calling the user defined
          * */
@@ -458,24 +459,43 @@ var productionBaseURL = 'https://endpoint.vector.watch/VectorCloud/rest/',
             });
         },
 
-        configHandler: function configHandler(auth, response) {
-            var promise = new Promise(), _this = this;
+        configHandler: function configHandler(state, response) {
+            var promise = new Promise(), anotherPromise = new Promise(), _this = this;
             promise.then(function (config) {
-                var settingsCounter = 0;
+                var settingsCounter = 0, firstSetting;
                 for (settingName in config.renderOptions) {
                     settingsCounter++;
+                    if (config.renderOptions[settingName].order == 0) {
+                        firstSetting = settingName;
+                    }
                 }
-                privateMethods.log("Request stream config successful, the response containing " + settingsCounter + " settings is being sent", LogLevels.info, true, _this.logstash);
-                response.status(200).json({
-                    v: 1,
-                    p: config
+                anotherPromise.then(function (options) {
+                    config.settings[firstSetting] = options;
+                    privateMethods.log("Request options successful, the response containing " + options.length + " options for the " + settingName + " setting is being sent", LogLevels.info, true, _this.logstash);
+                    response.status(200).json({
+                        v: 1,
+                        p: config
+                    });
+                }, function (reason, statusCode) {
+                    privateMethods.log("Request options unsuccessful, the response containing the error message is being sent.", LogLevels.error, true, _this.logstash);
+                    privateMethods.errorHandler(response, reason, statusCode);
                 });
+
+                _this.requestOptions(function (result) {
+                    anotherPromise.resolve(result);
+                }, function (err) {
+                    anotherPromise.reject(err);
+                }, firstSetting, '', state, null);
+
+                privateMethods.log("Request stream config successful, the response containing " + settingsCounter + " settings is being sent", LogLevels.info, true, _this.logstash);
+
+
             }, function (reason, statusCode) {
                 privateMethods.log("Request config unsuccessful, the response containing the error message is being sent.", LogLevels.error, true, _this.logstash);
                 privateMethods.errorHandler(response, reason, statusCode);
             });
 
-            privateMethods.getAccessToken.call(this, auth, function (err, tokens) {
+            privateMethods.getAccessToken.call(this, state.__auth, function (err, tokens) {
                 if (err) return promise.reject(err);
                 try {
                     _this.requestConfig(function (result) {
@@ -492,7 +512,7 @@ var productionBaseURL = 'https://endpoint.vector.watch/VectorCloud/rest/',
         optionsHandler: function optionsHandler(settingName, searchTerm, state, response) {
             var promise = new Promise(), _this = this;
             promise.then(function (options) {
-                privateMethods.log("Request options successful, the response containing " + options.length + " options for the is being sent", LogLevels.info, true, _this.logstash);
+                privateMethods.log("Request options successful, the response containing " + options.length + " options for the " + settingName + " setting is being sent", LogLevels.info, true, _this.logstash);
                 response.status(200).json({
                     v: 1,
                     p: options
