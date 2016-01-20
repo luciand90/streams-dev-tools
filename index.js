@@ -582,19 +582,19 @@ var productionBaseURL = 'https://endpoint.vector.watch/VectorCloud/rest/',
         errorHandler: function (response, reason, statusCode) {
             switch (statusCode) {
                 case ERROR_CODES.INTERNAL_SERVER_ERROR:
-                    privateMethods.log("stream-dev-tools internal error: " + reason, LogLevels.error, true, _this.logstash);
+                    privateMethods.log("stream-dev-tools internal error: " + reason, LogLevels.error, true, this.logstash);
                     break;
                 case ERROR_CODES.UNAUTHORIZED:
-                    privateMethods.log("The user is not logged in: " + reason, LogLevels.error, true, _this.logstash);
+                    privateMethods.log("The user is not logged in: " + reason, LogLevels.error, true, this.logstash);
                     break;
                 case ERROR_CODES.DEV_CODE_ERROR:
                     privateMethods.log('error', "Dev code error: " + reason, true);
                     break;
                 case ERROR_CODES.BAD_REQUEST:
-                    privateMethods.log("Bad request: " + reason, LogLevels.error, true, _this.logstash);
+                    privateMethods.log("Bad request: " + reason, LogLevels.error, true, this.logstash);
                     break;
                 default:
-                    privateMethods.log("Status error: " + reason, LogLevels.error, true, _this.logstash);
+                    privateMethods.log("Status error: " + reason, LogLevels.error, true, this.logstash);
             }
             response.status(statusCode || ERROR_CODES.BAD_REQUEST).json({"Error": reason.toString()});
         }
