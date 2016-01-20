@@ -356,7 +356,7 @@ var productionBaseURL = 'https://endpoint.vector.watch/VectorCloud/rest/',
             promise.then(function (streamValue) {
                 var httpStatus = 200;
                 if (typeof streamValue == 'object') {
-                    httpStatus = 204;
+                    httpStatus = 904;
                     streamValue = streamValue.msg;
                 }
                 privateMethods.log("Registration successfull, the response containing '" + streamValue + "' is being sent", LogLevels.info, true, _this.logstash);
