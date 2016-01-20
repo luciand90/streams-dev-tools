@@ -400,7 +400,7 @@ var productionBaseURL = 'https://endpoint.vector.watch/VectorCloud/rest/',
                 for (channelLabel in settings) {
                     privateMethods.log("Unregistration successfull for channel label:" + channelLabel, LogLevels.info, true, _this.logstash);
                 }
-                response.status(200);
+                response.status(200).json({});
             }, function (reason, statusCode) {
                 privateMethods.log("Unregistration unsuccessfull", LogLevels.error, true, _this.logstash);
                 privateMethods.errorHandler(response, reason, statusCode);
