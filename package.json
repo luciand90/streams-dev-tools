@@ -1,6 +1,6 @@
 {
   "name": "stream-dev-tools",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "description": "npm package for developing VectorWatch stream",
   "main": "index.js",
   "scripts": {

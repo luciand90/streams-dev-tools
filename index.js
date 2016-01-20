@@ -380,12 +380,16 @@ var productionBaseURL = 'https://endpoint.vector.watch/VectorCloud/rest/',
                 }
                 try {
                     _this.registerSettings(function (result) {
-                        privateMethods.storeSettingsItem.call(_this, state, function () {
+                        if (typeof result == 'object') {
                             promise.resolve(result);
-                        }, function (err) {
-                            privateMethods.log("Settings could not be persisted:" + err, LogLevels.error, true, _this.logstash);
-                            promise.reject(err, ERROR_CODES.INTERNAL_SERVER_ERROR);
-                        });
+                        } else {
+                            privateMethods.storeSettingsItem.call(_this, state, function () {
+                                promise.resolve(result);
+                            }, function (err) {
+                                privateMethods.log("Settings could not be persisted:" + err, LogLevels.error, true, _this.logstash);
+                                promise.reject(err, ERROR_CODES.INTERNAL_SERVER_ERROR);
+                            });
+                        }
 
                     }, function (err) {
                         promise.reject(err);
