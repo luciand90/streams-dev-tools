@@ -471,15 +471,45 @@ var productionBaseURL = 'https://endpoint.vector.watch/VectorCloud/rest/',
         configHandler: function configHandler(auth, response) {
             var promise = new Promise(), _this = this;
             promise.then(function (config) {
-                var settingsCounter = 0;
+                var settingsCounter = 0, firstSetting;
                 for (settingName in config.renderOptions) {
                     settingsCounter++;
+                    if (config.renderOptions.hasOwnProperty(settingName) && config.renderOptions[settingName].order == 0) {
+                        firstSetting = settingName;
+                    }
                 }
-                privateMethods.log("Request stream config successful, the response containing " + settingsCounter + " settings is being sent", LogLevels.info, true, _this.logstash);
-                response.status(200).json({
-                    v: 1,
-                    p: config
-                });
+                if (config.renderOptions[firstSetting].dataType == "DYNAMIC") {
+                    promise = new Promise();
+                    promise.then(function (options) {
+                        privateMethods.log("Request stream config successful, the response containing " + settingsCounter + " settings and " + options.length + " options for the '" + firstSetting + "' setting is being sent", LogLevels.info, true, _this.logstash);
+                        config.settings = {};
+                        config.settings[firstSetting] = options;
+                        response.status(200).json({
+                            v: 1,
+                            p: config
+                        });
+                    }, function (reason, statusCode) {
+                        privateMethods.log("Request options unsuccessful, the response containing the error message is being sent.", LogLevels.error, true, _this.logstash);
+                        privateMethods.errorHandler(response, reason, statusCode);
+                    });
+
+
+                    try {
+                        _this.requestOptions(function (result) {
+                            promise.resolve(result);
+                        }, function (err) {
+                            promise.reject(err);
+                        }, firstSetting);
+                    } catch (error) {
+                        promise.reject(error, ERROR_CODES.DEV_CODE_ERROR);
+                    }
+                } else {
+                    privateMethods.log("Request stream config successful, the response containing " + settingsCounter + " settings is being sent", LogLevels.info, true, _this.logstash);
+                    response.status(200).json({
+                        v: 1,
+                        p: config
+                    });
+                }
             }, function (reason, statusCode) {
                 privateMethods.log("Request config unsuccessful, the response containing the error message is being sent.", LogLevels.error, true, _this.logstash);
                 privateMethods.errorHandler(response, reason, statusCode);
