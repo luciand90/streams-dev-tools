@@ -58,6 +58,8 @@ var VectorWatchStreamNode = function VectorWatchStreamNode(options) {
         throw new Error('streamUUID is required.');
     }
     this.streamUUID = options.streamUUID;
+    this.contentVersion = options.contentPVersion;
+    this.streamVersion = options.version;
 
     if (options.database) {
         var connection = establishDBConnection(options.database);
@@ -181,6 +183,8 @@ VectorWatchStreamNode.prototype.push = function (state, data, delayInMinutes) {
         type: 3,
         streamUUID: this.streamUUID,
         channelLabel: state.channelLabel,
+        contentVersion: this.contentVersion,
+        streamVersion: this.streamVersion,
         d: data
     }, delayInMinutes * 60 * 1000);
     return this;
